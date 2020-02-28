@@ -71,10 +71,8 @@ class myBlobAnalyzerSide(object):
             labelVec  = np.arange(0,len(contours))
 
             ####################
-            #matchedCentroids = np.zeros((len(contours),)) #for each contour, a list of 2-element centroids
             matchedCentroids = [ [] for i in range(len(contours)) ]
-            print(str(len(contours)))
-            print(str(matchedCentroids))
+            predCentroidIsUsed = np.zeros(len(contours),dtype = bool)
             #startEval = time.time()
             #print(len(contours))
             for iObj in labelVec:
@@ -114,16 +112,16 @@ class myBlobAnalyzerSide(object):
                     
                     for pred in predictedCentroidsList:
                         #check if this predicted centroid is inside this area
-                        if minx < pred[0] < maxx and miny < pred[1] < maxy:
+                        if minx < pred[0] < maxx and miny < pred[1] < maxy and not predCentroidIsUsed[iObj]:
                             print("in contour")
                             matchedCentroids[iObj].append(np.array([pred]))
-                            #matchedCentroids[iObj] = np.append(matchedCentroids[iObj],np.array([pred]), axis = 0)
+                            predCentroidIsUsed[iObj] = True
                         #check if this predicted centroid is just outside this area
-                        elif minx - maxAssign < pred[0] < maxx + maxAssign and miny - maxAssign < pred[1] < maxy + maxAssign:
+                        elif minx - maxAssign < pred[0] < maxx + maxAssign and miny - maxAssign < pred[1] < maxy + maxAssign and not predCentroidIsUsed[iObj]:
                             print("near contour")
                             matchedCentroids[iObj].append(np.array([[(pred[0]+x)/2,(pred[1]+y)/2]]))
-                            #matchedCentroids[iObj] = np.append(matchedCentroids[iObj],np.array([[(pred[0]+x)/2,(pred[1]+y)/2]]), axis = 0)
-                    print("matched: "+str(len(matchedCentroids))+" "+str(matchedCentroids))
+                            #print("matched: "+str(len(matchedCentroids))+" "+str(matchedCentroids))
+                            predCentroidIsUsed[iObj] = True
                     if not matchedCentroids[iObj]==None and len(matchedCentroids[iObj]) > 1:
                         print("pred centroids")
                         #add the predicted contours as actual contours to final centroids list
