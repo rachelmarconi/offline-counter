@@ -63,16 +63,16 @@ def predictNewLocationsOfTracks(tracks,numFrames = 1,leftEdge= 140,frameWidth = 
             predictedCentroid[0][0] = leftEdge
             tracks[i]['predictor'].estVelocity[0][0] = 0
         '''
-        if predictedCentroid[0][1] > 350: #arbitrary very large y position
+        if predictedCentroid[0][1] > 300: #arbitrary very large y position
             tracks[i]['consecutiveInvisibleCount'] = 1000 #arbitrary very large invisible--get rid of it
         else:
             print("    {}\tid: {}".format(predictedCentroid,tracks[i]['id']))
-        # Shift the bounding box so that its center is at.
+            # Shift the bounding box so that its center is at.
         tracks[i]['center'] = predictedCentroid
         
     return tracks,predictedCentroidsList
 
-def detectObjects(bA,frame,predictedCentroidsList,maxAssign):
+def detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob):
     # Detect foreground.
     mask = frame.astype('int16')
     
@@ -81,7 +81,7 @@ def detectObjects(bA,frame,predictedCentroidsList,maxAssign):
     mask = mask.astype('bool')
     
     # Perform blob analysis to find connected components.
-    area,centroids = bA.step(mask,predictedCentroidsList,maxAssign)
+    area,centroids = bA.step(mask,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
     print("    --------")
     for c in centroids:
         print("    {}".format(c))
@@ -184,10 +184,10 @@ def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estV
     
     return tracks,centroidsNew,countVec
 
-def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames):
-    print("step")
+def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob):
+    print("step----------------------------------------------")
     tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.leftEdge,frame.shape[1])
-    area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign)
+    area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
     
     assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracksPred,centroids,maxAssign)
     

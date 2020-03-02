@@ -38,7 +38,12 @@ class myBlobAnalyzerSide(object):
         
         self.blobSplit = 0
   
-    def step(self,cImgIn,predictedCentroidsList,maxAssign):
+    def step(self,cImgIn,predictedCentroidsList,garbMaxAssign,calibrate,inputMaxBlob,inputMinBlob):
+        if not calibrate:
+            self.maxBlobSize = inputMaxBlob
+            self.minBlobArea = inputMinBlob
+        maxAssign = 2*(self.maxBlobSize**.5)
+        
         area = np.empty(0)
         centroids = np.empty((0,2))
         isFirst = True
@@ -90,21 +95,22 @@ class myBlobAnalyzerSide(object):
                     else:
                         caveKeep = self.concavityThresh*256 < defects[:,:,3] # multiply by the bit size (256)
                         nDiffs = int(np.ceil(sum(caveKeep)[0]/2.0) + 1)
-                        #if nDiffs > 1:
-                        #    print('concavity: ' + str(nDiffs))
+                        if nDiffs > 1:
+                            print('concavity: ' + str(nDiffs))
                 else:
                         nDiffs = 1
                 rows,cols = cImg.shape[:2]
                 [vx,vy,x,y] = cv2.fitLine(cCont, cv2.DIST_L2,0,0.01,0.01)
                 
                 #save important info
-                print("contours shape: "+str(contourCentroids.shape))
+                #print("contours shape: "+str(contourCentroids.shape))
                 contourCentroids[iObj] = np.zeros(2)
                 contourCentroids[iObj][0] = x
                 contourCentroids[iObj][1] = y
                 contourAreas[iObj] = cv2.contourArea(cCont) 
                 numDiffPillsinConts[iObj] = nDiffs        
             print("first contourCentroids:\n{}".format(contourCentroids))
+            print("contour areas: {}".format(contourAreas))
             
             #test each predicted area to see which area is closest to this predicted
             for iPred in range(len(predictedCentroidsList)):
@@ -115,12 +121,16 @@ class myBlobAnalyzerSide(object):
                 cClosest = 1000
                 iClosest = 0
                 for iCont in range(len(contours)):
+                    print("checking contour")
                     #only if the area is big enough?
                     if contourAreas[iCont] > self.minBlobArea:
+                        print("big enough to check")
                         #how far from this center? populate distances
+                        #print("( {:.2f}-{:.2f}^2 + {:.2f}-{:.2f}^2 )^.5".format(contourCentroids[iCont][0],pred[0],contourCentroids[iCont][1],pred[1]))
                         dist = np.abs(((contourCentroids[iCont][0]-pred[0])**2 + (contourCentroids[iCont][1]-pred[1])**2)**.5)
-                        print("dist: {}".format(dist))
+                        print("dist: {:.3f}".format(dist))
                         if dist < cClosest:
+                            print("current closest")
                             cClosest = dist
                             iClosest = iCont
                 #which is closest?
@@ -132,14 +142,14 @@ class myBlobAnalyzerSide(object):
                 miny = np.min(correctCont[:,:,1])
                 maxy = np.max(correctCont[:,:,1])
                 
-                print("closest x: ({:.1f},{:.1f}). y: ({:.1f},{:.1f}); dist: {}; centroid: {}".format(minx,maxx,miny,maxy,cClosest,contourCentroids[iClosest]))
+                print("closest x: ({:.1f},{:.1f}). y: ({:.1f},{:.1f}); dist: {:.3f}; centroid: {}".format(minx,maxx,miny,maxy,cClosest,contourCentroids[iClosest]))
                 
                 if minx < pred[0] < maxx and miny < pred[1] < maxy:
-                    print("in contour")
+                    print("track is in contour")
                     matchedCentroids[iClosest].append(np.array([pred]))
                 #check if this predicted centroid is just outside this area
                 elif minx - maxAssign < pred[0] < maxx + maxAssign and miny - maxAssign < pred[1] < maxy + maxAssign:
-                    print("near contour")
+                    print("track is near contour")
                     matchedCentroids[iClosest].append(np.array([[(pred[0]+contourCentroids[iClosest][0])/2,(pred[1]+contourCentroids[iClosest][1])/2]]))
                     #print("matched: "+str(len(matchedCentroids))+" "+str(matchedCentroids))
 
@@ -149,10 +159,10 @@ class myBlobAnalyzerSide(object):
                 if cArea > self.minBlobArea:
                     #print('extra')
                     if not matchedCentroids[iObj]==None and len(matchedCentroids[iObj]) > 1:
-                        print("pred centroids")
+                        print("using predicted centroids")
                         #add the predicted contours as actual contours to final centroids list
                         for i in range(len(matchedCentroids[iObj])):
-                            print("matches: "+str(matchedCentroids[iObj][i][0]))
+                            print("pedicted matches: "+str(matchedCentroids[iObj][i][0]))
                             if isFirst:
                                 isFirst = False
                                 centroids = np.zeros((1,2))
@@ -160,11 +170,11 @@ class myBlobAnalyzerSide(object):
                             else:
                                 centroids = np.vstack((centroids,matchedCentroids[iObj][i][0]))
                             
-                        print("centroids :"+str(centroids))
+                        #print("centroids :"+str(centroids))
                             
                     else:
                         #add actual centroid
-                        print("actual centroid")
+                        print("using actual centroid")
                         if isFirst:
                             isFirst = False
                             centroids = np.zeros((1,2))
@@ -175,10 +185,10 @@ class myBlobAnalyzerSide(object):
                 ####################
                     nDiffs = numDiffPillsinConts[iObj]
                     if nDiffs == 1 and self.frameCount > 35:
-                        '''
-                        if cArea > 2.1*self.maxBlobSize:
-                            centroids = np.column_stack((centroids,np.array([x,y])))
-                            centroids = np.column_stack((centroids,np.array([x,y]))) #so 3 pills-- 3 centroids total
+                        
+                        if cArea > 2.1*self.maxBlobSize and len(matchedCentroids[iObj]) == 2:
+                            centroids = np.vstack((centroids,contourCentroids[iObj]))
+                            centroids = np.vstack((centroids,contourCentroids[iObj])) #so 3 pills-- 3 centroids total
                             
                             nDiffs = 3
                             area = np.append(area,cArea/3)
@@ -186,7 +196,7 @@ class myBlobAnalyzerSide(object):
                             cBlobSplit = cArea/self.maxBlobSize
                             self.blobSplit = np.max([self.blobSplit,cBlobSplit])
                             print('{} double blob split {}'.format(datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'), cBlobSplit))
-                        '''
+                        
                         if cArea > 1.25*self.maxBlobSize and len(matchedCentroids[iObj]) == 1:
                             
                             area = np.append(area,cArea/2)
@@ -196,12 +206,14 @@ class myBlobAnalyzerSide(object):
                             cBlobSplit = cArea/self.maxBlobSize
                             self.blobSplit = np.max([self.blobSplit,cBlobSplit])
                             print('{} blob split {}'.format(datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'), cBlobSplit))
+                    '''
                     elif nDiffs > 1:
                         for count in range(nDiffs - 1):
                             area = np.append(area,cArea/nDiffs)
                             centroids = np.vstack((centroids,contourCentroids[iObj]))
                             #centroids = np.column_stack((centroids,contourCentroids[iObj]))
-
+                            print("added centroid for concavity")
+                    '''
                     area = np.append(area,cArea/nDiffs)                   
 
             
@@ -212,7 +224,7 @@ class myBlobAnalyzerSide(object):
            
             #print('time to check:  {0:.06f}'.format(time.time() - startEval))
             if area.size > 0:
-                if (self.frameCount<=500 and area.size > 0): # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
+                if (calibrate and self.frameCount<=500 and area.size > 0): # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
                     self.maxBlobSize = np.max(np.append(area,self.maxBlobSize)) # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area) # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount], 98) # 98th percentile (reduce some outliers)                   
@@ -226,7 +238,7 @@ class myBlobAnalyzerSide(object):
                     self.clearEst = self.clearEst + int((len(hierarchy[0]) - len(contours)) > 1) # create an estimate for how clear it is
                 
         #centroids = np.transpose(centroids)        
-        print("centroids: "+str(centroids))
+        #print("centroids: "+str(centroids))
         return area, centroids
 
         

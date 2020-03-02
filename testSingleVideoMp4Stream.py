@@ -58,6 +58,9 @@ def runSingleVideo(videoFileName):
     
     nextId = 1 # ID of the next track
     
+    calibrate = False
+    inputMaxBlob = 2800
+    inputMinBlob = inputMaxBlob*.35
     
     time2Run = numTotalFrames
     
@@ -81,7 +84,7 @@ def runSingleVideo(videoFileName):
         frame[frame < 150] = 0
         frame[frame >= 55] = 1
         
-        tracksNew, nextId = tracker.step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames)
+        tracksNew, nextId = tracker.step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob)
         
         tracks = tracksNew.copy();
         
