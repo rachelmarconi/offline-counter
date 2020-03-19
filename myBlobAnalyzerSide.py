@@ -78,8 +78,8 @@ class myBlobAnalyzerSide(object):
             print("contour areas: {}".format(contourAreas))
 
             # test each predicted area to see which area is closest to this predicted
-            self.find_nearest_predicted_area(contourAreas, contourCentroids, contours, matchedCentroids,
-                                             predictedCentroidsList)
+            # self.find_nearest_predicted_area(contourAreas, contourCentroids, contours, matchedCentroids,
+            #                                  predictedCentroidsList)
 
             # then go through contours again for adding centroids to final list
             area, centroids = self.get_centroids_from_areas(area, centroids, contourAreas, contourCentroids, contours,
@@ -125,22 +125,24 @@ class myBlobAnalyzerSide(object):
             cArea = contourAreas[iObj]
             if cArea > self.minBlobArea:
                 # print('extra')
-                if not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) > 1:
-                    print("using predicted centroids")
-                    # add the predicted points as actual points to final centroids list
-                    for i in range(len(matchedCentroids[iObj])):
-                        foundMatches = np.vstack((foundMatches, matchedCentroids[iObj][i][0]))
-                elif not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) <= 1 \
-                        and cArea <= (self.maxBlobSize * 1.1):
+                # if not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) > 1:
+                #     print("using matched centroids")
+                #     # add the predicted points as actual points to final centroids list
+                #     for i in range(len(matchedCentroids[iObj])):
+                #         foundMatches = np.vstack((foundMatches, matchedCentroids[iObj][i][0]))
+                #elif  not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) <= 1 \
+                #           and  cArea <= (self.maxBlobSize * 1.1):
+                if  cArea <= (self.maxBlobSize * 1.1):
                     # add actual centroid
                     print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
-                elif not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) <= 1 \
-                        and cArea > (self.maxBlobSize * 1.1):
+                # elif not matchedCentroids[iObj] == None and len(matchedCentroids[iObj]) <= 1 \
+                #         and cArea > (self.maxBlobSize * 1.1):
+                else: # cArea > (self.maxBlobSize * 1.1):
                     cCont = contours[iObj]
                     x = contourCentroids[iObj][0]
                     y = contourCentroids[iObj][1]
-                    ct1, ct2 = self.find_2_bolb_centroids(cCont, x, y)
+                    ct1, ct2 = self.find_2_blob_centroids(cCont, x, y)
                     foundMatches = np.vstack((foundMatches, ct1))
                     foundMatches = np.vstack((foundMatches, ct2))
 
@@ -171,7 +173,7 @@ class myBlobAnalyzerSide(object):
     * This method will return the two best guess centroids for a multi-pill blob.
     """
 
-    def find_2_bolb_centroids(self, cCont, x, y):
+    def find_2_blob_centroids(self, cCont, x, y):
         # This finds a tight fitting rotated rectangle to best fit the blob
         rect = cv2.minAreaRect(cCont)
         box = cv2.boxPoints(rect)
@@ -194,87 +196,85 @@ class myBlobAnalyzerSide(object):
     """*************************************************************************************************************
     * This method will find the area closed to the predicted centroid location.
     """
-
-    def find_nearest_predicted_area(self, contourAreas, contourCentroids, contours, matchedCentroids,
-                                    predictedCentroidsList):
-        for iPred in range(len(predictedCentroidsList)):
-            # this predicted centroid
-            pred = predictedCentroidsList[iPred]
-            print("pred: {}".format(pred))
-
-            cClosest = 1000
-            iClosest = 0
-            for iCont in range(len(contours)):
-                # only if the area is big enough?
-                if contourAreas[iCont] >= self.minBlobArea:
-                    x = contourCentroids[iCont][0]
-                    y = contourCentroids[iCont][1]
-                    if contourAreas[iCont] > (self.maxBlobSize * 1.1):
-                        ct1, ct2 = self.find_2_bolb_centroids(contours[iCont], x, y)
-                        dist = min(((ct1[0][0] - pred[0]) ** 2 + (
-                                ct1[0][1] - pred[1]) ** 2) ** .5,
-                                   ((ct2[0][0] - pred[0]) ** 2 + (
-                                           ct2[0][1] - pred[1]) ** 2) ** .5)
-                    else:
-                        dist = ((x - pred[0]) ** 2 + (
-                                y - pred[1]) ** 2) ** .5
-                    print("dist: {:.3f}".format(dist))
-                    if dist < cClosest:
-                        # print("current closest")
-                        cClosest = dist
-                        iClosest = iCont
-
-            if contourAreas[iClosest] >= self.minBlobArea:
-                # which is closest?
-                correctCont = contours[iClosest]
-                # check if within area or within maxAssign
-
-                """
-                #*********** Using area centroids
-                if cClosest <= self.maxAssign:
-                    if contourAreas[iClosest] > (self.maxBlobSize * 1.1):
-                        ct1, ct2 = self.find_2_bolb_centroids(contours[iClosest],
-                                                              contourCentroids[iCont][0], contourCentroids[iCont][1])
-                        if ((ct1[0][0] - pred[0]) ** 2 + (ct1[0][1] - pred[1]) ** 2) < \
-                                ((ct2[0][0] - pred[0]) ** 2 + (ct2[0][1] - pred[1]) ** 2):
-                            matchedCentroids[iClosest].append(np.array(ct1))
-                        else:
-                            matchedCentroids[iClosest].append(np.array(ct2))
-                    else:
-                        matchedCentroids[iClosest].append(np.array(contourCentroids[iClosest]))
-                else:
-                    print("Centroid: ", pred, "no match: too far")
-
-                 """
-                #*********** Using Predicted
-                # find the max and min of x and y
-                minx = np.min(correctCont[:, :, 0])
-                maxx = np.max(correctCont[:, :, 0])
-                miny = np.min(correctCont[:, :, 1])
-                maxy = np.max(correctCont[:, :, 1])
-                print("closest x: ({:.1f},{:.1f}). y: ({:.1f},{:.1f}); dist: {:.3f}; centroid: {}".
-                      format(minx, maxx, miny, maxy, cClosest, contourCentroids[iClosest]))
-                if minx < pred[0] < maxx and miny < pred[1] < maxy and not cClosest == 1000:
-                    print("track is in contour")
-                    if cClosest > .35 * self.maxAssign:
-                        print("far: altering 10%")
-                        pred[0] = pred[0] + .1 * (contourCentroids[iClosest][0] - pred[0])
-                        pred[1] = pred[1] + .1 * (contourCentroids[iClosest][1] - pred[1])
-                    matchedCentroids[iClosest].append(np.array([pred]))
-                # check if this predicted centroid is just outside this area
-                elif cClosest < self.maxAssign:
-                    print("track is near contour edge")
-                    matchedCentroids[iClosest].append(np.array([[(pred[0] + contourCentroids[iClosest][0]) / 2,
-                                                                 (pred[1] + contourCentroids[iClosest][1]) / 2]]))
-                    # print("matched: "+str(len(matchedCentroids))+" "+str(matchedCentroids))
-                else:
-                    print("no match: too far")
-                """"""
+    # def find_nearest_predicted_area(self, contourAreas, contourCentroids, contours, matchedCentroids,
+    #                                 predictedCentroidsList):
+    #     for iPred in range(len(predictedCentroidsList)):
+    #         # this predicted centroid
+    #         pred = predictedCentroidsList[iPred]
+    #         print("pred: {}".format(pred))
+    #
+    #         cClosest = 1000
+    #         iClosest = 0
+    #         for iCont in range(len(contours)):
+    #             # only if the area is big enough?
+    #             if contourAreas[iCont] >= self.minBlobArea:
+    #                 x = contourCentroids[iCont][0]
+    #                 y = contourCentroids[iCont][1]
+    #                 if contourAreas[iCont] > (self.maxBlobSize * 1.1):
+    #                     ct1, ct2 = self.find_2_blob_centroids(contours[iCont], x, y)
+    #                     dist = min(((ct1[0][0] - pred[0]) ** 2 + (
+    #                             ct1[0][1] - pred[1]) ** 2) ** .5,
+    #                                ((ct2[0][0] - pred[0]) ** 2 + (
+    #                                        ct2[0][1] - pred[1]) ** 2) ** .5)
+    #                 else:
+    #                     dist = ((x - pred[0]) ** 2 + (
+    #                             y - pred[1]) ** 2) ** .5
+    #                 print("dist: {:.3f}".format(dist))
+    #                 if dist < cClosest:
+    #                     # print("current closest")
+    #                     cClosest = dist
+    #                     iClosest = iCont
+    #
+    #         if contourAreas[iClosest] >= self.minBlobArea:
+    #             # which is closest?
+    #             correctCont = contours[iClosest]
+    #             # check if within area or within maxAssign
+    #
+    #             """*********************
+    #             #*********** Using area centroids
+    #             if cClosest <= self.maxAssign:
+    #                 if contourAreas[iClosest] > (self.maxBlobSize * 1.1):
+    #                     ct1, ct2 = self.find_2_bolb_centroids(contours[iClosest],
+    #                                                           contourCentroids[iCont][0], contourCentroids[iCont][1])
+    #                     if ((ct1[0][0] - pred[0]) ** 2 + (ct1[0][1] - pred[1]) ** 2) < \
+    #                             ((ct2[0][0] - pred[0]) ** 2 + (ct2[0][1] - pred[1]) ** 2):
+    #                         matchedCentroids[iClosest].append(np.array(ct1))
+    #                     else:
+    #                         matchedCentroids[iClosest].append(np.array(ct2))
+    #                 else:
+    #                     matchedCentroids[iClosest].append(np.array(contourCentroids[iClosest]))
+    #             else:
+    #                 print("Centroid: ", pred, "no match: too far")
+    #
+    #             """
+    #             #*********** Using Predicted
+    #             # find the max and min of x and y
+    #             minx = np.min(correctCont[:, :, 0])
+    #             maxx = np.max(correctCont[:, :, 0])
+    #             miny = np.min(correctCont[:, :, 1])
+    #             maxy = np.max(correctCont[:, :, 1])
+    #             print("closest x: ({:.1f},{:.1f}). y: ({:.1f},{:.1f}); dist: {:.3f}; centroid: {}".
+    #                   format(minx, maxx, miny, maxy, cClosest, contourCentroids[iClosest]))
+    #             if minx < pred[0] < maxx and miny < pred[1] < maxy and not cClosest == 1000:
+    #                 print("track is in contour")
+    #                 if cClosest > .35 * self.maxAssign:
+    #                     print("far: altering 10%")
+    #                     pred[0] = pred[0] + .1 * (contourCentroids[iClosest][0] - pred[0])
+    #                     pred[1] = pred[1] + .1 * (contourCentroids[iClosest][1] - pred[1])
+    #                 matchedCentroids[iClosest].append(np.array([pred]))
+    #             # check if this predicted centroid is just outside this area
+    #             elif cClosest < self.maxAssign:
+    #                 print("track is near contour edge")
+    #                 matchedCentroids[iClosest].append(np.array([[(pred[0] + contourCentroids[iClosest][0]) / 2,
+    #                                                              (pred[1] + contourCentroids[iClosest][1]) / 2]]))
+    #                 # print("matched: "+str(len(matchedCentroids))+" "+str(matchedCentroids))
+    #             else:
+    #                 print("no match: too far")
+    #             """"""
 
     """*************************************************************************************************************
     * This method will search through the contours and add contourCentroids for appropriate contours.
     """
-
     def find_centroids_and_areas(self, cImg, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                  bottomEdge, topEdge):
         for iObj in labelVec:
@@ -311,7 +311,6 @@ class myBlobAnalyzerSide(object):
     * This method will return cropped main view and side images based on the parameters percentFrameRemoveX,
     * percentFrameremoveY, and percentFrameRemoveY.
     """
-
     def CropImage(self, cImgIn):
         # make this a percentage of the frame
         cImg = cImgIn.copy()
