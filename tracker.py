@@ -48,27 +48,37 @@ def tracker(vDetected,FPS,maxAssign):
         frameTime[iFrame] = time.clock() - startTime
     return countVec, frameTime
 
-def predictNewLocationsOfTracks(tracks,numFrames = 1,leftEdge= 140,frameWidth = 300):
+def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameWidth = 300):
     predictedCentroidsList = np.zeros((len(tracks),2))
     for i in range(len(tracks)):
         # Predict the current location of the track.
         predictedCentroid = tracks[i]['predictor'].predict(numFrames)
-        predictedCentroidsList[i] = predictedCentroid[0] #only x,y
+        #predictedCentroidsList[i] = predictedCentroid[0] #only x,y
+
+
+        if predictedCentroid[0][0] < 0: #past the left wall 
+            predictedCentroid[0][0] = 0 #set new location to along the wall
+            tracks[i]['predictor'].estVelocity[0][0] = 0 #no further left velocity
+
+        if predictedCentroid[0][0] > rightEdge:
+            predictedCentroid[0][0] = rightEdge
+            tracks[i]['predictor'].estVelocity[0][0] = 0
         '''
         if predictedCentroid[0][0] > frameWidth: #past the left wall 
-            predictedCentroid[0][0] = frameWidth #set new location to allong the wall
+            predictedCentroid[0][0] = frameWidth #set new location to along the wall
             tracks[i]['predictor'].estVelocity[0][0] = 0 #no further left velocity
 
         if predictedCentroid[0][0] < leftEdge:
             predictedCentroid[0][0] = leftEdge
             tracks[i]['predictor'].estVelocity[0][0] = 0
         '''
-        if predictedCentroid[0][1] > 300: #arbitrary very large y position
-            tracks[i]['consecutiveInvisibleCount'] = 1000 #arbitrary very large invisible--get rid of it
-        else:
-            print("    {}\tid: {}".format(predictedCentroid,tracks[i]['id']))
-            # Shift the bounding box so that its center is at.
+        # Shift the bounding box so that its center is at.
         tracks[i]['center'] = predictedCentroid
+
+    tracks = [ tracks[i] for i in range(len(tracks)) if tracks[i]['center'][0][1] < 280 ]
+    predictedCentroidsList = [ tracks[i]['center'][0] for i in range(len(tracks)) ]
+    for i in range(len(tracks)):
+        print("    {}\tid: {}".format(tracks[i]['center'],tracks[i]['id']))
         
     return tracks,predictedCentroidsList
 
@@ -186,7 +196,7 @@ def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estV
 
 def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob):
     print("step----------------------------------------------")
-    tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.leftEdge,frame.shape[1])
+    tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.rightEdge,frame.shape[1])
     area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
     
     assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracksPred,centroids,maxAssign)
