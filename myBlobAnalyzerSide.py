@@ -50,8 +50,8 @@ class myBlobAnalyzerSide(object):
 
         cImg, sideView = self.CropImage(cImgIn)
 
-        bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameRemoveY[1])) - 3
-        topEdge = int(cImg.shape[0] * self.percentFrameRemoveY[0]) + 3
+        bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameremoveY[1])) - 3
+        topEdge = int(cImg.shape[0] * self.percentFrameremoveY[0]) + 3
 
         if np.any(cImg):
             # print("{:.0f}/{:.0f}; {:.0f}".format(self.maxBlobSize, self.minBlobArea, self.maxAssign))
@@ -147,8 +147,12 @@ class myBlobAnalyzerSide(object):
                     foundMatches = np.vstack((foundMatches, ct2))
 
                 estPills = int(cArea / (self.maxBlobSize + 0.1))
+                # comes from concavity defect counter
+                if estPills < numDiffPillsinConts[iObj]:
+                    estPills = numDiffPillsinConts[iObj]
+
                 while estPills > len(foundMatches):
-                    ct = [[x, y]]
+                    ct = contourCentroids[iObj]
                     foundMatches = np.vstack((foundMatches, ct))
 
                 nDiffs = 1
