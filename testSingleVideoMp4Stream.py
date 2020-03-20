@@ -126,7 +126,8 @@ if __name__ == "__main__":
     # for vFileName in videoFileList:
     #index = 0
     #runSingleVideo(videoFileList[index])
-    runSingleVideo(infile)
+    if infile != None:
+        runSingleVideo(infile)
     # for vFileName in videoFileList:
     # print(vFileName)
     # runSingleVideo(vFileName)
