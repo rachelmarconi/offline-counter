@@ -50,8 +50,8 @@ class myBlobAnalyzerSide(object):
 
         cImg, sideView = self.CropImage(cImgIn)
 
-        bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameremoveY[1])) - 3
-        topEdge = int(cImg.shape[0] * self.percentFrameremoveY[0]) + 3
+        bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameRemoveY[1])) - 3
+        topEdge = int(cImg.shape[0] * self.percentFrameRemoveY[0]) + 3
 
         if np.any(cImg):
             # print("{:.0f}/{:.0f}; {:.0f}".format(self.maxBlobSize, self.minBlobArea, self.maxAssign))
@@ -229,16 +229,16 @@ class myBlobAnalyzerSide(object):
             numDiffPillsinConts[iObj] = nDiffs
 
     """*************************************************************************************************************
-    * This method will return cropped main view and side images based on the parameters percentFrameRemoveX,
-    * percentFrameremoveY, and percentFrameRemoveY.
+    * This method will return cropped main view and side images 
+    * based on the parameters percentFrameRemoveX and percentFrameRemoveY.
     """
     def CropImage(self, cImgIn):
         # make this a percentage of the frame
         cImg = cImgIn.copy()
         # Set top percent(0.02) rows in cImg to zeros
-        cImg[0:int(np.ceil(cImg.shape[0] * self.percentFrameremoveY[0])), :] = 0
+        cImg[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
         # Set the bottom percent(0.02) rows to zero
-        cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameremoveY[1])):, :] = 0
+        cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
         # Set the left percent(0.01) cols to zero
         cImg[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
         # Set the right percent(0.44) cols to zero
@@ -246,13 +246,13 @@ class myBlobAnalyzerSide(object):
         # MAKE side view
         sideView = cImgIn.copy();
         # Set the left percent (0.40) cols to zero
-        sideView[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveY[0]))] = 0
+        sideView[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
         # Set the right percent(0.04) cols to zero
-        sideView[:, -int(np.ceil(cImg.shape[1] * self.percentFrameRemoveY[1])):] = 0
+        sideView[:, -int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[1])):] = 0
         # Set top percent (0.02) rows in cImg to zeros
-        sideView[0:int(np.ceil(cImg.shape[0] * self.percentFrameremoveY[0])), :] = 0
+        sideView[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
         # Set bottom percent (0.02) rows in cImg to zeros
-        sideView[-int(np.ceil(cImg.shape[0] * self.percentFrameremoveY[1])):, :] = 0
+        sideView[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
         sideView = 255 * sideView.copy().astype('uint8')
         return cImg, sideView
 
