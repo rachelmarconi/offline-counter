@@ -45,7 +45,7 @@ def runSingleVideo(videoFileName):
     bA = myBlobAnalyzerSide()
 
     bA.percentFrameRemoveX = [1 / 100.0, 44 / 100.0]  # [0,0]#
-    bA.percentFrameremoveY = [2 / 100.0, 2 / 100.0]  # [0,0]#
+    bA.percentFrameRemoveY = [2 / 100.0, 2 / 100.0]  # [0,0]#
 
     bA.concavityThresh = 8#18#8#18#32
     bA.maxBlobSize = 0
