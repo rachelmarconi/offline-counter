@@ -235,25 +235,34 @@ class myBlobAnalyzerSide(object):
     def CropImage(self, cImgIn):
         # make this a percentage of the frame
         cImg = cImgIn.copy()
-        # Set top percent(0.02) rows in cImg to zeros
-        cImg[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
-        # Set the bottom percent(0.02) rows to zero
-        cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
         # Set the left percent(0.01) cols to zero
         cImg[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
         # Set the right percent(0.44) cols to zero
         cImg[:, -int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[1])):] = 0
+        # Set top percent(0.02) rows in cImg to zeros
+        cImg[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
+        # Set the bottom percent(0.02) rows to zero
+        cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
         # MAKE side view
         sideView = cImgIn.copy();
-        # Set the left percent (0.40) cols to zero
-        sideView[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
-        # Set the right percent(0.04) cols to zero
-        sideView[:, -int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[1])):] = 0
-        # Set top percent (0.02) rows in cImg to zeros
-        sideView[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
-        # Set bottom percent (0.02) rows in cImg to zeros
-        sideView[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
-        sideView = 255 * sideView.copy().astype('uint8')
+        sideView[:,-int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
+        sideView[:,0:int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .25)))] = 0
+        sideView[0:int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0])),:] = 0
+        sideView[-int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])):,:] = 0
+        sideView = 255*sideView.copy().astype('uint8')
+
+        # MCF: An attempt to capture an image of the windows. It doesn't work as is.
+        # if self.frameCount == 200:
+        #     a = np.expand_dims(cImgIn.astype('uint8'), axis=2)
+        #     a = np.concatenate((a, a, a), axis=2)
+        #     cv2.imwrite("orininal.jpg", a)
+        #     b = np.expand_dims(cImg.astype('uint8'), axis=2)
+        #     b = np.concatenate((b, b, b), axis=2)
+        #     cv2.imwrite("main_win.jpg", b)
+        #     c = np.expand_dims(sideView.astype('uint8'), axis=2)
+        #     c = np.concatenate((c, c, c), axis=2)
+        #     cv2.imwrite("side_win.jpg", c)
+
         return cImg, sideView
 
     """*************************************************************************************************************
