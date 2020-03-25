@@ -16,7 +16,7 @@ class myBlobAnalyzerSide(object):
         self.minBlobAreaAbs = 100;
         self.minBlobArea = self.minBlobAreaAbs
         self.minBlobAreaPercentage = 0
-        self.concavityThresh = 5;
+        self.concavityThresh = 8;
         self.sideLookTresh = .30;
 
         self.percentFrameRemoveX = [.06, .47]
@@ -25,8 +25,8 @@ class myBlobAnalyzerSide(object):
 
         self.sideViewStart = 190
         self.sideViewEnd = 255
-
         self.sideViewSizeAdjust = 100  # in percent
+        self.side_contours = None
 
         self.areaVec = np.zeros((500, 1))
         self.minAreaVec = np.nan * np.ones((500, 1))
@@ -42,6 +42,8 @@ class myBlobAnalyzerSide(object):
         if not calibrate:
             self.maxBlobSize = inputMaxBlob
             self.minBlobArea = inputMinBlob
+            # Scale the max concavity based on the pill size
+            self.concavityThresh = ((self.maxBlobSize / 3.1415926)**.5) / 2.6
         self.maxAssign = self.maxBlobSize ** .5
         self.stepCount += 1
         area = np.empty(0)
@@ -62,6 +64,10 @@ class myBlobAnalyzerSide(object):
                                                                   1)  # changed from ...(tmpcImg,2,1)
             contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
             labelVec = np.arange(0, len(contours))
+
+            tmpGarbage, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE,
+                                                                  1)  # changed from ...(tmpcImg,2,1)
+            self.side_contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
 
             ####################
             matchedCentroids = [[] for i in range(len(contours))]
@@ -93,15 +99,12 @@ class myBlobAnalyzerSide(object):
 
             # print('time to check:  {0:.06f}'.format(time.time() - startEval))
             if area.size > 0:
-                if (
-                        calibrate and self.frameCount <= 500 and area.size > 0):  # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
+                # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
+                if (calibrate and self.frameCount <= 500 and area.size > 0):
                     self.maxBlobSize = np.max(np.append(area, self.maxBlobSize))  # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area)  # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount],
                                                      98)  # 98th percentile (reduce some outliers)
-                    # self.minAreaVec[self.frameCount - 1] = np.min(area) # min of the ones in this frame
-                    # self.minBlobArea = np.max((self.minBlobAreaAbs,
-                    #                    np.percentile(self.minAreaVec[0:self.frameCount], 2))) # 98th percentile (reduce some outliers)
                     self.minBlobArea = np.max(
                         ((self.minBlobAreaPercentage / 100.0) * self.maxBlobSize, self.minBlobAreaAbs))
                 self.frameCount = self.frameCount + 1  # increase framecount
@@ -109,30 +112,27 @@ class myBlobAnalyzerSide(object):
                 if (self.frameCount <= 50):  # 50 frames of pills to check clear est
                     self.clearEst = self.clearEst + int(
                         (len(hierarchy[0]) - len(contours)) > 1)  # create an estimate for how clear it is
-
-        # centroids = np.transpose(centroids)
-        # print("centroids: "+str(centroids))
         return area, centroids
 
     """*************************************************************************************************************
     * This method will match the centroids to the found areas and attempt to set or adjust the centroid position 
     * to its most probable location.
     """
-
     def get_centroids_from_areas(self, area, centroids, contourAreas, contourCentroids, contours, isFirst, labelVec,
                                  matchedCentroids, numDiffPillsinConts, bottomEdge, topEdge):
+        SIDE_VIEW_OFFSET = 15  # approximat pixel error in side view image
         for iObj in labelVec:
             foundMatches = np.zeros((0, 2))  # none
             cArea = contourAreas[iObj]
             estPills = 1
             if cArea > self.minBlobArea:
                 cCont = contours[iObj]
+                x, y, w, h = cv2.boundingRect(cCont)
                 if  cArea <= (self.maxBlobSize * 1.1):
                     # add actual centroid
                     print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
                 else: # cArea > (self.maxBlobSize * 1.1):
-                    x, y, w, h = cv2.boundingRect(cCont)
                     if (y + h) < bottomEdge and y > topEdge:
                         x = contourCentroids[iObj][0]
                         y = contourCentroids[iObj][1]
@@ -146,6 +146,23 @@ class myBlobAnalyzerSide(object):
                 # comes from concavity defect counter
                 if estPills < numDiffPillsinConts[iObj]:
                     estPills = numDiffPillsinConts[iObj]
+
+                # check side view count
+                # no side view check if others at this y range
+                others = False
+                for i in labelVec:
+                    if(i != iObj):
+                        x2, y2, w2, h2 = cv2.boundingRect(contours[i])
+                        if (y2 >= y and y2 <= y+h) or (y2 < y and y2+h2 > y):
+                            others = True
+                            break
+                if not others and self.side_contours is not None:
+                    print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
+                    side_count = self.get_side_count(y - 2,
+                                                     y + h + 2, bottomEdge, topEdge)
+                    if estPills < side_count:
+                        estPills = side_count
+                        print("Using side count")
 
                 while estPills > len(foundMatches):
                     ct = contourCentroids[iObj]
@@ -172,7 +189,6 @@ class myBlobAnalyzerSide(object):
     """*************************************************************************************************************
     * This method will return the two best guess centroids for a multi-pill blob.
     """
-
     def find_2_blob_centroids(self, cCont, x, y):
         # This finds a tight fitting rotated rectangle to best fit the blob
         rect = cv2.minAreaRect(cCont)
@@ -194,27 +210,36 @@ class myBlobAnalyzerSide(object):
         return ct1, ct2
 
     """*************************************************************************************************************
+    * This method will get the estimated pill count for a given contour based on concavities.
+    """
+    def count_pills_in_cont(self, cont, bottomEdge, topEdge):
+        cHull = cv2.convexHull(cont, returnPoints=False)
+        x, y, w, h = cv2.boundingRect(cont)
+        defects = cv2.convexityDefects(cont, cHull)
+        if defects is not None:
+            # contYArray = np.squeeze(np.array(cCont[cHull]))[:, 1]
+            # if np.any(contYArray >= bottomEdge) or np.any(contYArray <= topEdge):
+            if (y + h) >= bottomEdge or y <= topEdge:
+                nDiffs = 1
+            else:
+                caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
+                nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
+                if nDiffs > 1:
+                    print('concavity: ' + str(nDiffs))
+        else:
+            nDiffs = 1
+
+        return nDiffs
+
+    """*************************************************************************************************************
     * This method will search through the contours and add contourCentroids for appropriate contours.
     """
     def find_centroids_and_areas(self, cImg, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                  bottomEdge, topEdge):
         for iObj in labelVec:
             cCont = contours[iObj]
-            nDiffs = 1
-            cHull = cv2.convexHull(cCont, returnPoints=False)
-            defects = cv2.convexityDefects(cCont, cHull)
-            if defects is not None:
-                contYArray = np.squeeze(np.array(cCont[cHull]))[:, 1]
-                if np.any(contYArray >= bottomEdge) or np.any(contYArray <= topEdge):
-                    nDiffs = 1
-                else:
-                    caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
-                    nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
-                    if nDiffs > 1:
-                        print('concavity: ' + str(nDiffs))
-            else:
-                nDiffs = 1
-            # rows, cols = cImg.shape[:2]
+            nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
+
             [vx, vy, x, y] = cv2.fitLine(cCont, cv2.DIST_L2, 0, 0.01, 0.01)
 
             # Set centroid at center of the blob
@@ -228,8 +253,9 @@ class myBlobAnalyzerSide(object):
             # print("\t\t\t\t\t\t\t\t\t\t\t\t\ttotal concavity area: {}".format(thisTotalConcavityArea))
             numDiffPillsinConts[iObj] = nDiffs
 
-    """*************************************************************************************************************
-    * This method will return cropped main view and side images 
+    """***************************************************************************************
+    * This method will return image frames for the main and side view with the unused 
+    * portions of each image zeroed out.
     * based on the parameters percentFrameRemoveX and percentFrameRemoveY.
     """
     def CropImage(self, cImgIn):
@@ -245,37 +271,52 @@ class myBlobAnalyzerSide(object):
         cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
         # MAKE side view
         sideView = cImgIn.copy();
+        # Set the right most percent(0.01) cols to zero
+        right_col = cImg.shape[1] - int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))
         sideView[:,-int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
-        sideView[:,0:int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .25)))] = 0
+        # Set the left percent(44% + 25%) cols to zero
+        left_col = int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .20)))
+        sideView[:,0:int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .20)))] = 0
+        # Set top percent(0.02) rows in cImg to zeros
+        top_row = int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0]))
         sideView[0:int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0])),:] = 0
+        # Set the bottom percent(0.02) rows to zero
+        bottom_row = cImg.shape[0] - int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1]))
         sideView[-int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])):,:] = 0
         sideView = 255*sideView.copy().astype('uint8')
 
-        # MCF: An attempt to capture an image of the windows. It doesn't work as is.
-        # if self.frameCount == 200:
-        #     a = np.expand_dims(cImgIn.astype('uint8'), axis=2)
-        #     a = np.concatenate((a, a, a), axis=2)
-        #     cv2.imwrite("orininal.jpg", a)
-        #     b = np.expand_dims(cImg.astype('uint8'), axis=2)
-        #     b = np.concatenate((b, b, b), axis=2)
-        #     cv2.imwrite("main_win.jpg", b)
-        #     c = np.expand_dims(sideView.astype('uint8'), axis=2)
-        #     c = np.concatenate((c, c, c), axis=2)
-        #     cv2.imwrite("side_win.jpg", c)
-
         return cImg, sideView
 
-    """*************************************************************************************************************
+    """***********************************************************************************************
     * This method returns qualified contour areas from the side view image.
     """
-
     def getSideAreas(self, sideView):
-        tmpGarbage, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE,
-                                                              1)  # changed from ...(tmpcImg,2,1)
-        contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
         side_areas = []
-        for cCont in contours:
+        for cCont in self.side_contours:
             cArea = cv2.contourArea(cCont)
             if cArea > self.minBlobArea:
                 side_areas.append(cArea * self.sideViewSizeAdjust / 100.0)
         return side_areas
+
+    """*********************************************************************************************
+    * This method returns number of estimated pills in the side view between top and bottom.
+    """
+    def get_side_count(self, top, bottom, bottomEdge, topEdge):
+        num_counted = 0
+
+        for cont in self.side_contours:
+            area = cv2.contourArea(cont)
+            if area >= self.minBlobArea:
+                x, y, w, h = cv2.boundingRect(cont)
+                print("Side pill: left = {}, top = {}, bottom = {}, area = {}".format(x, y, y + h, area))
+
+                # Is this contour at the right height?
+                if y >= top and (y + h) < bottom:
+                    num_counted += self.count_pills_in_cont(cont, bottomEdge, topEdge)
+
+                # Area estimates are not reliable
+                #estPills = 1 + int(area / (self.maxBlobSize + 0.1))
+                #num_counted = max(num_counted, estPills)
+        print("Side pill count: {}".format(num_counted))
+
+        return num_counted
