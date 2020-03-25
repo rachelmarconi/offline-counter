@@ -311,7 +311,7 @@ class myBlobAnalyzerSide(object):
                 print("Side pill: left = {}, top = {}, bottom = {}, area = {}".format(x, y, y + h, area))
 
                 # Is this contour at the right height?
-                if y >= top and (y + h) < bottom:
+                if y >= top and (y + h) <= bottom:
                     num_counted += self.count_pills_in_cont(cont, bottomEdge, topEdge)
 
                 # Area estimates are not reliable
