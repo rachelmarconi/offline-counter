@@ -38,6 +38,7 @@ class myBlobAnalyzerSide(object):
         self.maxAssign = 50
         self.stepCount = 0
 
+        self.first = True
     def step(self, cImgIn, predictedCentroidsList, garbMaxAssign, calibrate, inputMaxBlob, inputMinBlob):
         if not calibrate:
             self.maxBlobSize = inputMaxBlob
@@ -50,7 +51,8 @@ class myBlobAnalyzerSide(object):
         centroids = np.empty((0, 2))
         isFirst = True
 
-        cImg, sideView = self.CropImage(cImgIn)
+        cImg, sideView = self.CropImage(cImgIn, self.first)
+        self.first = False
 
         bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameRemoveY[1])) - 3
         topEdge = int(cImg.shape[0] * self.percentFrameRemoveY[0]) + 3
@@ -134,9 +136,9 @@ class myBlobAnalyzerSide(object):
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
                 else: # cArea > (self.maxBlobSize * 1.1):
                     if (y + h) < bottomEdge and y > topEdge:
-                        x = contourCentroids[iObj][0]
-                        y = contourCentroids[iObj][1]
-                        ct1, ct2 = self.find_2_blob_centroids(cCont, x, y)
+                        x1 = contourCentroids[iObj][0]
+                        y1 = contourCentroids[iObj][1]
+                        ct1, ct2 = self.find_2_blob_centroids(cCont, x1, y1)
                         foundMatches = np.vstack((foundMatches, ct1))
                         foundMatches = np.vstack((foundMatches, ct2))
                         estPills = int(cArea / (self.maxBlobSize + 0.1))
@@ -225,7 +227,8 @@ class myBlobAnalyzerSide(object):
                 caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
                 nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
                 if nDiffs > 1:
-                    print('concavity: ' + str(nDiffs))
+                    print('Concavity: ' + str(nDiffs))
+                    print("Contour bounds (left,top) = {},{}, right,bottom = {},{}".format(x, y, x+w, y+h) )
         else:
             nDiffs = 1
 
@@ -258,32 +261,41 @@ class myBlobAnalyzerSide(object):
     * portions of each image zeroed out.
     * based on the parameters percentFrameRemoveX and percentFrameRemoveY.
     """
-    def CropImage(self, cImgIn):
+    def CropImage(self, cImgIn, first):
         # make this a percentage of the frame
         cImg = cImgIn.copy()
         # Set the left percent(0.01) cols to zero
+        left_x = int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[0] )))
         cImg[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
         # Set the right percent(0.44) cols to zero
+        right_x = int(cImg.shape[1] - (np.ceil(cImg.shape[1] * self.percentFrameRemoveX[1])))
         cImg[:, -int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[1])):] = 0
         # Set top percent(0.02) rows in cImg to zeros
+        top_y = int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0]))
         cImg[0:int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[0])), :] = 0
         # Set the bottom percent(0.02) rows to zero
+        bottom_y = int(cImg.shape[0] - (np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])))
         cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
+
+        if first:
+            print("Image size w = {}, h= {}".format(cImg.shape[1], cImg.shape[0]))
+            print("Main window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
+
         # MAKE side view
         sideView = cImgIn.copy();
         # Set the right most percent(0.01) cols to zero
-        right_col = cImg.shape[1] - int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))
+        right_x = int(cImg.shape[1] - (np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0])))
         sideView[:,-int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
         # Set the left percent(44% + 25%) cols to zero
-        left_col = int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .20)))
+        left_x = int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .20)))
         sideView[:,0:int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[1] + .20)))] = 0
         # Set top percent(0.02) rows in cImg to zeros
-        top_row = int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0]))
         sideView[0:int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0])),:] = 0
         # Set the bottom percent(0.02) rows to zero
-        bottom_row = cImg.shape[0] - int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1]))
         sideView[-int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])):,:] = 0
         sideView = 255*sideView.copy().astype('uint8')
+        if first:
+            print("Side window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
 
         return cImg, sideView
 
