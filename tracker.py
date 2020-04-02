@@ -48,7 +48,7 @@ def tracker(vDetected,FPS,maxAssign):
         frameTime[iFrame] = time.clock() - startTime
     return countVec, frameTime
 
-def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameWidth = 300):
+def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameHeight = 300):
     predictedCentroidsList = np.zeros((len(tracks),2))
     for i in range(len(tracks)):
         # Predict the current location of the track.
@@ -75,7 +75,7 @@ def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameWidth =
         # Shift the bounding box so that its center is at.
         tracks[i]['center'] = predictedCentroid
 
-    tracks = [ tracks[i] for i in range(len(tracks)) if tracks[i]['center'][0][1] < 280 ]
+    tracks = [ tracks[i] for i in range(len(tracks)) if tracks[i]['center'][0][1] <  frameHeight] # 280 frameHeight
     predictedCentroidsList = [ tracks[i]['center'][0] for i in range(len(tracks)) ]
     for i in range(len(tracks)):
         print("    {}\tid: {}".format(tracks[i]['center'],tracks[i]['id']))
@@ -196,7 +196,7 @@ def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estV
 
 def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob):
     print("step----------------------------------------------")
-    tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.rightEdge,frame.shape[1])
+    tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.rightEdge,frame.shape[0])
     area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
     
     assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracksPred,centroids,maxAssign)
