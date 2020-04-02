@@ -44,6 +44,7 @@ class myBlobAnalyzerSide(object):
             self.maxBlobSize = inputMaxBlob
             self.minBlobArea = inputMinBlob
             # Scale the max concavity based on the pill size
+            # self.concavityThresh = 7+int(self.maxBlobSize / 1200) # ((self.maxBlobSize / 3.1415926)**.5) / 2.6
             self.concavityThresh = ((self.maxBlobSize / 3.1415926)**.5) / 2.6
         self.maxAssign = self.maxBlobSize ** .5
         self.stepCount += 1
@@ -111,7 +112,7 @@ class myBlobAnalyzerSide(object):
                         ((self.minBlobAreaPercentage / 100.0) * self.maxBlobSize, self.minBlobAreaAbs))
                 self.frameCount = self.frameCount + 1  # increase framecount
 
-                if (self.frameCount <= 50):  # 50 frames of pills to check clear est
+                if (self.frameCount <= 50) and hierarchy is not None:  # 50 frames of pills to check clear est
                     self.clearEst = self.clearEst + int(
                         (len(hierarchy[0]) - len(contours)) > 1)  # create an estimate for how clear it is
         return area, centroids
@@ -216,19 +217,33 @@ class myBlobAnalyzerSide(object):
     """
     def count_pills_in_cont(self, cont, bottomEdge, topEdge):
         cHull = cv2.convexHull(cont, returnPoints=False)
-        x, y, w, h = cv2.boundingRect(cont)
         defects = cv2.convexityDefects(cont, cHull)
         if defects is not None:
+            x, y, w, h = cv2.boundingRect(cont)
             # contYArray = np.squeeze(np.array(cCont[cHull]))[:, 1]
             # if np.any(contYArray >= bottomEdge) or np.any(contYArray <= topEdge):
-            if (y + h) >= bottomEdge or y <= topEdge:
-                nDiffs = 1
-            else:
-                caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
-                nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
-                if nDiffs > 1:
-                    print('Concavity: ' + str(nDiffs))
-                    print("Contour bounds (left,top) = {},{}, right,bottom = {},{}".format(x, y, x+w, y+h) )
+
+            # MCF, Use defect concavity point to determine if defect is safe to use for pill split
+            nDiffs = 1
+            keep = 0
+            for i in range(len(defects[:,:,3])):
+                if(defects[i][0][3] >= self.concavityThresh * 256 ):
+                    # Blob overlaps to ok. Don't overlap bottom, causes issues.
+                    if cont[defects[i][0][2]][0][1] > topEdge + 4 \
+                            and (y + h) <= bottomEdge: # dont overlap bottom
+                       keep +=1
+            if keep > 0:
+                nDiffs = int(np.ceil(keep/2.0)+1)
+
+            # x, y, w, h = cv2.boundingRect(cont)
+            # if (y + h) >= bottomEdge or y <= topEdge:
+            #     nDiffs = 1
+            # else:
+            #     caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
+            #     nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
+            #     if nDiffs > 1:
+            #         print('Concavity: ' + str(nDiffs))
+            #         print("Contour bounds (left,top) = {},{}, right,bottom = {},{}".format(x, y, x+w, y+h) )
         else:
             nDiffs = 1
 
