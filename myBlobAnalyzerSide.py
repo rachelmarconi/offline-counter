@@ -136,7 +136,7 @@ class myBlobAnalyzerSide(object):
                     print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
                 else: # cArea > (self.maxBlobSize * 1.1):
-                    if (y + h) < bottomEdge and y > topEdge:
+                    if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
                         x1 = contourCentroids[iObj][0]
                         y1 = contourCentroids[iObj][1]
                         ct1, ct2 = self.find_2_blob_centroids(cCont, x1, y1)
@@ -153,16 +153,19 @@ class myBlobAnalyzerSide(object):
                 # check side view count
                 # no side view check if others at this y range
                 others = False
+                y_tolarance = 2  # Alowable variance in sideview y value
                 for i in labelVec:
                     if(i != iObj):
                         x2, y2, w2, h2 = cv2.boundingRect(contours[i])
-                        if (y2 >= y and y2 <= y+h) or (y2 < y and y2+h2 > y):
-                            others = True
+                        #if (y2 >= y and y2 <= y+h) or (y2 < y and y2+h2 > y):
+                        # disqualified only if another pill is totally withing our latitude
+                        if y2 >= y - 6 and y2 + h2 <= y + h + 6:
+                            others = True # other pills are in our Y range
                             break
                 if not others and self.side_contours is not None:
                     print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
-                    side_count = self.get_side_count(y - 2,
-                                                     y + h + 2, bottomEdge, topEdge)
+                    side_count = self.get_side_count(y - y_tolarance,
+                                                     y + h + y_tolarance, bottomEdge, topEdge)
                     if estPills < side_count:
                         estPills = side_count
                         print("Using side count")
