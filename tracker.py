@@ -24,7 +24,7 @@ def tracker(vDetected,FPS,maxAssign):
     bA.percentFrameRemoveX = [.06,.47]
     bA.percentFrameRemoveY = [.4,.04]
     bA.concavityThresh = 5
-    
+
     estVelStart = np.array([[0,13]],'double')#15]],'double') alterred for 480fps instead of 400fps  #[0,50].*(120/FPS).*(fliplr(size(frame)./[480,720]));
     tracks = []
     
@@ -43,7 +43,9 @@ def tracker(vDetected,FPS,maxAssign):
         tracks = updateAssignedTracks(tracks,centroids,assignments)
         tracks = updateUnassignedTracks(tracks,unassignedTracks)
         tracks = deleteLostTracks(tracks)
-        tracks,centroids,countVec,nextId = createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,nextId,estVelStart)
+        tracks,centroids,countVec,nextId = createNewTracks(tracks, centroids, unassignedDetections,
+                                                           countVec,iFrame,nextId,estVelStart,
+                                                           frame.shape[0] - bA.maxAssign)
         
         frameTime[iFrame] = time.clock() - startTime
     return countVec, frameTime
@@ -173,40 +175,44 @@ def deleteLostTracks(tracks):
     
     return tracks
 
-def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estVelStart):    
+def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estVelStart, lowestNewTrack=260):
     centroidsNew = centroids[unassignedDetections, :];
     
     for i in range(centroidsNew.shape[0]):
         centroid = centroidsNew[[i],:]
-        predictor = pillUtil.myPillPredictorSimple()
-        
-        ### correct for 200FPS and resolution
-        predictor.estVelocity = estVelStart
-        predictor.minVertVel = predictor.estVelocity[:,1]*.9 
-        predictor.centroid = centroid
-        # Create a new track.
-        newTrack = [{'id': 0,'center': centroid,'predictor': predictor, 'age': 1,'totalVisibleCount':1,'consecutiveInvisibleCount':0}]
-        
-        # Add it to the array of tracks.
-        tracks.extend(newTrack)
-        
-        #countVec[iFrame] = countVec[iFrame] + 1 # increment count vec
+        # MCF: Added a check to prevent adding a new track at the bottom of the frame.
+        if centroid[0][1] <  lowestNewTrack:
+            predictor = pillUtil.myPillPredictorSimple()
+
+            ### correct for 200FPS and resolution
+            predictor.estVelocity = estVelStart
+            predictor.minVertVel = predictor.estVelocity[:,1]*.9
+            predictor.centroid = centroid
+            # Create a new track.
+            newTrack = [{'id': 0,'center': centroid,'predictor': predictor, 'age': 1,'totalVisibleCount':1,'consecutiveInvisibleCount':0}]
+
+            # Add it to the array of tracks.
+            tracks.extend(newTrack)
+
+            #countVec[iFrame] = countVec[iFrame] + 1 # increment count vec
     
     return tracks,centroidsNew,countVec
 
 def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob):
+
     print("step----------------------------------------------")
     tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.rightEdge,frame.shape[0])
+
     area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
     
     assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracksPred,centroids,maxAssign)
-    
     tracksAssign = updateAssignedTracks(tracksPred,centroids,assignments)
     tracksUnassign = updateUnassignedTracks(tracksAssign,unassignedTracks)
     
     tracksUnassign,nextId = updateTrackCountId(tracksUnassign,curId)
     
     tracksDelete = deleteLostTracks(tracksUnassign)
-    tracksNew,centroids,nada = createNewTracks(tracksDelete, centroids, unassignedDetections,None,None,estVelStart)
+    tracksNew,centroids,nada = createNewTracks(tracksDelete, centroids, unassignedDetections,None,None,estVelStart,
+                                               frame.shape[0] - bA.maxAssign)
     
     return tracksNew,nextId
