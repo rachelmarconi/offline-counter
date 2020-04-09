@@ -13,11 +13,11 @@ import datetime
 # %%
 class myBlobAnalyzerSide(object):
     def __init__(self):
-        self.minBlobAreaAbs = 100;
+        self.minBlobAreaAbs = 100
         self.minBlobArea = self.minBlobAreaAbs
         self.minBlobAreaPercentage = 0
-        self.concavityThresh = 8;
-        self.sideLookTresh = .30;
+        self.concavityThresh = 8
+        self.sideLookTresh = .30
 
         self.percentFrameRemoveX = [.06, .47]
         self.percentFrameRemoveY = [.4, .04]
@@ -37,8 +37,14 @@ class myBlobAnalyzerSide(object):
         self.blobSplit = 0
         self.maxAssign = 50
         self.stepCount = 0
-
         self.first = True
+
+        # To find concavity indents
+        # A valid concavity slope vector will exceed this threshold
+        self.thresholdSlopeVect = 65
+        # Take a point every (skipPts) around contour perimeter.
+        self.skipPts = 10 # take every 10th point
+
     def step(self, cImgIn, predictedCentroidsList, garbMaxAssign, calibrate, inputMaxBlob, inputMinBlob):
         if not calibrate:
             self.maxBlobSize = inputMaxBlob
@@ -117,12 +123,12 @@ class myBlobAnalyzerSide(object):
                         (len(hierarchy[0]) - len(contours)) > 1)  # create an estimate for how clear it is
         return area, centroids
 
-    """*************************************************************************************************************
-    * This method will match the centroids to the found areas and attempt to set or adjust the centroid position 
-    * to its most probable location.
-    """
     def get_centroids_from_areas(self, area, centroids, contourAreas, contourCentroids, contours, isFirst, labelVec,
                                  matchedCentroids, numDiffPillsinConts, bottomEdge, topEdge):
+        """*************************************************************************************************************
+        * This method will match the centroids to the found areas and attempt to set or adjust the centroid position
+        * to its most probable location.
+        """
         SIDE_VIEW_OFFSET = 15  # approximat pixel error in side view image
         for iObj in labelVec:
             foundMatches = np.zeros((0, 2))  # none
@@ -192,10 +198,10 @@ class myBlobAnalyzerSide(object):
                 centroids = np.vstack((centroids, foundMatches))
         return area, centroids
 
-    """*************************************************************************************************************
-    * This method will return the two best guess centroids for a multi-pill blob.
-    """
     def find_2_blob_centroids(self, cCont, x, y):
+        """*************************************************************************************************************
+        * This method will return the two best guess centroids for a multi-pill blob.
+        """
         # This finds a tight fitting rotated rectangle to best fit the blob
         rect = cv2.minAreaRect(cCont)
         box = cv2.boxPoints(rect)
@@ -215,10 +221,10 @@ class myBlobAnalyzerSide(object):
         ct2 = [[x + vecX, y + vecY]]
         return ct1, ct2
 
-    """*************************************************************************************************************
-    * This method will get the estimated pill count for a given contour based on concavities.
-    """
     def count_pills_in_cont(self, cont, bottomEdge, topEdge):
+        """*************************************************************************************************************
+        * This method will get the estimated pill count for a given contour based on concavities.
+        """
         cHull = cv2.convexHull(cont, returnPoints=False)
         defects = cv2.convexityDefects(cont, cHull)
         if defects is not None:
@@ -231,32 +237,32 @@ class myBlobAnalyzerSide(object):
             keep = 0
             for i in range(len(defects[:,:,3])):
                 if(defects[i][0][3] >= self.concavityThresh * 256 ):
-                    # Blob overlaps to ok. Don't overlap bottom, causes issues.
-                    if cont[defects[i][0][2]][0][1] > topEdge + 4 \
-                            and (y + h) <= bottomEdge: # dont overlap bottom
-                       keep +=1
+                    # Get the X and Y arrays from every (self.skipPts) pixel in the contour
+                    xarray = np.squeeze(cont[0::self.skipPts])[:, 0]
+                    yarray = np.squeeze(cont[0::self.skipPts])[:, 1]
+                    # Get the slopes delta x, delta y around the perimeter of the contour
+                    dx = np.diff(xarray)
+                    dx = np.append(dx, [dx[0]])  # Wrap
+                    dy = np.diff(yarray)
+                    dy = np.append(dy, [dy[0]])  # Wrap
+                    for i in range(len(dx) - 1):
+                        val = (dx[i] * dy[i + 1] - dy[i] * dx[i + 1])
+                        if val > self.thresholdSlopeVect and yarray[i+1] > topEdge + 4 \
+                                and yarray[i+1] + self.maxAssign < bottomEdge:
+                            keep +=1
+                    break
             if keep > 0:
                 nDiffs = int(np.ceil(keep/2.0)+1)
-
-            # x, y, w, h = cv2.boundingRect(cont)
-            # if (y + h) >= bottomEdge or y <= topEdge:
-            #     nDiffs = 1
-            # else:
-            #     caveKeep = self.concavityThresh * 256 < defects[:, :, 3]  # multiply by the bit size (256)
-            #     nDiffs = int(np.ceil(sum(caveKeep)[0] / 2.0) + 1)
-            #     if nDiffs > 1:
-            #         print('Concavity: ' + str(nDiffs))
-            #         print("Contour bounds (left,top) = {},{}, right,bottom = {},{}".format(x, y, x+w, y+h) )
         else:
             nDiffs = 1
 
         return nDiffs
 
-    """*************************************************************************************************************
-    * This method will search through the contours and add contourCentroids for appropriate contours.
-    """
     def find_centroids_and_areas(self, cImg, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                  bottomEdge, topEdge):
+        """*************************************************************************************************************
+        * This method will search through the contours and add contourCentroids for appropriate contours.
+        """
         for iObj in labelVec:
             cCont = contours[iObj]
             nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
@@ -274,12 +280,12 @@ class myBlobAnalyzerSide(object):
             # print("\t\t\t\t\t\t\t\t\t\t\t\t\ttotal concavity area: {}".format(thisTotalConcavityArea))
             numDiffPillsinConts[iObj] = nDiffs
 
-    """***************************************************************************************
-    * This method will return image frames for the main and side view with the unused 
-    * portions of each image zeroed out.
-    * based on the parameters percentFrameRemoveX and percentFrameRemoveY.
-    """
     def CropImage(self, cImgIn, first):
+        """***************************************************************************************
+        * This method will return image frames for the main and side view with the unused
+        * portions of each image zeroed out.
+        * based on the parameters percentFrameRemoveX and percentFrameRemoveY.
+        """
         # make this a percentage of the frame
         cImg = cImgIn.copy()
         # Set the left percent(0.01) cols to zero
@@ -317,10 +323,10 @@ class myBlobAnalyzerSide(object):
 
         return cImg, sideView
 
-    """***********************************************************************************************
-    * This method returns qualified contour areas from the side view image.
-    """
     def getSideAreas(self, sideView):
+        """***********************************************************************************************
+        * This method returns qualified contour areas from the side view image.
+        """
         side_areas = []
         for cCont in self.side_contours:
             cArea = cv2.contourArea(cCont)
@@ -328,10 +334,10 @@ class myBlobAnalyzerSide(object):
                 side_areas.append(cArea * self.sideViewSizeAdjust / 100.0)
         return side_areas
 
-    """*********************************************************************************************
-    * This method returns number of estimated pills in the side view between top and bottom.
-    """
     def get_side_count(self, top, bottom, bottomEdge, topEdge):
+        """*********************************************************************************************
+        * This method returns number of estimated pills in the side view between top and bottom.
+        """
         num_counted = 0
 
         for cont in self.side_contours:
