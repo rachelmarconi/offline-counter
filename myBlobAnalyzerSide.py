@@ -165,7 +165,10 @@ class myBlobAnalyzerSide(object):
                         x2, y2, w2, h2 = cv2.boundingRect(contours[i])
                         #if (y2 >= y and y2 <= y+h) or (y2 < y and y2+h2 > y):
                         # disqualified only if another pill is totally withing our latitude
-                        if y2 >= y - 6 and y2 + h2 <= y + h + 6:
+                        maxOverlap = self.maxAssign / 8
+                        #if y2 >= y - 6 and y2 + h2 <= y + h + 6:
+                        if (y2 < y + maxOverlap and y2 + h2 > y + maxOverlap) \
+                                or (y2 >= y + maxOverlap and y2 <  (y + h) - maxOverlap):
                             others = True # other pills are in our Y range
                             break
                 if not others and self.side_contours is not None:
