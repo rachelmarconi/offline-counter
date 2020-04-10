@@ -99,7 +99,7 @@ class myBlobAnalyzerSide(object):
             # then go through contours again for adding centroids to final list
             area, centroids = self.get_centroids_from_areas(area, centroids, contourAreas, contourCentroids, contours,
                                                             isFirst, labelVec, matchedCentroids, numDiffPillsinConts,
-                                                            bottomEdge, topEdge)
+                                                            bottomEdge, topEdge, calibrate)
 
             if self.sideViewSizeAdjust != 0 and self.frameCount <= 5:
                 # add in sideview areas
@@ -124,7 +124,7 @@ class myBlobAnalyzerSide(object):
         return area, centroids
 
     def get_centroids_from_areas(self, area, centroids, contourAreas, contourCentroids, contours, isFirst, labelVec,
-                                 matchedCentroids, numDiffPillsinConts, bottomEdge, topEdge):
+                                 matchedCentroids, numDiffPillsinConts, bottomEdge, topEdge, calibrate):
         """*************************************************************************************************************
         * This method will match the centroids to the found areas and attempt to set or adjust the centroid position
         * to its most probable location.
@@ -141,7 +141,7 @@ class myBlobAnalyzerSide(object):
                     # add actual centroid
                     print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
-                else: # cArea > (self.maxBlobSize * 1.1):
+                elif not calibrate or self.frameCount > 15: # cArea > (self.maxBlobSize * 1.1):
                     if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
                         x1 = contourCentroids[iObj][0]
                         y1 = contourCentroids[iObj][1]
