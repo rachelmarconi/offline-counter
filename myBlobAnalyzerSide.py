@@ -137,7 +137,7 @@ class myBlobAnalyzerSide(object):
             if cArea > self.minBlobArea:
                 cCont = contours[iObj]
                 x, y, w, h = cv2.boundingRect(cCont)
-                if  cArea <= (self.maxBlobSize * 1.1):
+                if  cArea <= (self.maxBlobSize * 1.1) and numDiffPillsinConts[iObj] < 2:
                     # add actual centroid
                     print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
