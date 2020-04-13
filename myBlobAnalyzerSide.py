@@ -41,7 +41,7 @@ class myBlobAnalyzerSide(object):
 
         # To find concavity indents
         # A valid concavity slope vector will exceed this threshold
-        self.thresholdSlopeVect = 65
+        self.thresholdSlopeVect = 60
         # Take a point every (skipPts) around contour perimeter.
         self.skipPts = 10 # take every 10th point
 
@@ -51,7 +51,15 @@ class myBlobAnalyzerSide(object):
             self.minBlobArea = inputMinBlob
             # Scale the max concavity based on the pill size
             # self.concavityThresh = 7+int(self.maxBlobSize / 1200) # ((self.maxBlobSize / 3.1415926)**.5) / 2.6
-            self.concavityThresh = ((self.maxBlobSize / 3.1415926)**.5) / 2.6
+            if self.first:
+                self.concavityThresh = ((self.maxBlobSize / 3.1415926)**.5) / 2.6
+                if self.maxBlobSize < 1210:
+                    self.thresholdSlopeVect = 10
+                    self.skipPts = 5
+                elif self.maxBlobSize < 2000:
+                    self.thresholdSlopeVect = 40
+                    self.skipPts = 8
+
         self.maxAssign = self.maxBlobSize ** .5
         self.stepCount += 1
         area = np.empty(0)
@@ -248,11 +256,16 @@ class myBlobAnalyzerSide(object):
                     dx = np.append(dx, [dx[0]])  # Wrap
                     dy = np.diff(yarray)
                     dy = np.append(dy, [dy[0]])  # Wrap
+                    prev = False
                     for i in range(len(dx) - 1):
+                        if prev:
+                            prev=False
+                            continue
                         val = (dx[i] * dy[i + 1] - dy[i] * dx[i + 1])
                         if val > self.thresholdSlopeVect and yarray[i+1] > topEdge + 4 \
                                 and yarray[i+1] + self.maxAssign < bottomEdge:
                             keep +=1
+                            prev = True # skip next index
                     break
             if keep > 0:
                 nDiffs = int(np.ceil(keep/2.0)+1)
@@ -269,6 +282,8 @@ class myBlobAnalyzerSide(object):
         for iObj in labelVec:
             cCont = contours[iObj]
             nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
+            # if self.stepCount == 4280:
+            #     print ("cont = ",cCont)
 
             [vx, vy, x, y] = cv2.fitLine(cCont, cv2.DIST_L2, 0, 0.01, 0.01)
 
