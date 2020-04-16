@@ -8,7 +8,7 @@ Created on Wed May 30 13:22:07 2018
 import numpy as np
 import cv2
 import datetime
-
+import math
 
 # %%
 class myBlobAnalyzerSide(object):
@@ -39,11 +39,24 @@ class myBlobAnalyzerSide(object):
         self.stepCount = 0
         self.first = True
 
-        # To find concavity indents
-        # A valid concavity slope vector will exceed this threshold
-        self.thresholdSlopeVect = 60
+        # *********** Concavity qualification parameters
+        # This will scale the determine the skip_points based on the pill circumference
+        self.skip_scale = 19
+        # A valid concavity x-product vector will exceed this threshold
+        self.scale_prodx_hi = 0.65 # scale threshold based on parimeter
+        self.thresh_prodx_hi = 60
+
+        # MCF: The following are currently too sensitive for some screen areas.
+        # A valid concavity will also be valid if it exceeds both the following thresholds
+        # self.scale_prodx_lo = 0.25
+        # self.thresh_prodx_lo = 20
+        # self.scale_dot = 0.06
+        # self.thresh_dot = 5
         # Take a point every (skipPts) around contour perimeter.
-        self.skipPts = 10 # take every 10th point
+
+        self.skip_pts = 10 # take every 10th point
+
+        # *********** End concavity qualification parameters
 
     def step(self, cImgIn, predictedCentroidsList, garbMaxAssign, calibrate, inputMaxBlob, inputMinBlob):
         if not calibrate:
@@ -52,13 +65,13 @@ class myBlobAnalyzerSide(object):
             # Scale the max concavity based on the pill size
             # self.concavityThresh = 7+int(self.maxBlobSize / 1200) # ((self.maxBlobSize / 3.1415926)**.5) / 2.6
             if self.first:
-                self.concavityThresh = ((self.maxBlobSize / 3.1415926)**.5) / 2.6
-                if self.maxBlobSize < 1210:
-                    self.thresholdSlopeVect = 10
-                    self.skipPts = 5
-                elif self.maxBlobSize < 2000:
-                    self.thresholdSlopeVect = 40
-                    self.skipPts = 8
+                perimeter = math.sqrt(4*math.pi * self.maxBlobSize)
+                radius = math.sqrt(self.maxBlobSize / math.pi)
+                self.concavityThresh = radius / 2.6
+                self.skip_pts = int(round(perimeter/self.skip_scale))
+                self.thresh_prodx_hi = self.skip_pts ** 2 * self.scale_prodx_hi
+                # self.thresh_prodx_lo = self.skip_pts ** 2 * self.scale_prodx_lo
+                # self.thresh_dot = self.skip_pts ** 2 * self.scale_dot
 
         self.maxAssign = self.maxBlobSize ** .5
         self.stepCount += 1
@@ -76,14 +89,11 @@ class myBlobAnalyzerSide(object):
             # print("{:.0f}/{:.0f}; {:.0f}".format(self.maxBlobSize, self.minBlobArea, self.maxAssign))
             print("Step# ", self.stepCount, " pill sz: ", self.maxBlobSize, "/", self.minBlobArea, "/", self.maxAssign)
 
-            tmpcImg = 255 * cImg.copy().astype('uint8')
-            tmpGarbage, contoursAll, hierarchy = cv2.findContours(tmpcImg, cv2.RETR_TREE,
-                                                                  1)  # changed from ...(tmpcImg,2,1)
+            tmpGarbage, contoursAll, hierarchy = cv2.findContours(cImg, cv2.RETR_TREE, 1)
             contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
             labelVec = np.arange(0, len(contours))
 
-            tmpGarbage, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE,
-                                                                  1)  # changed from ...(tmpcImg,2,1)
+            tmpGarbage, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE, 1)
             self.side_contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
 
             ####################
@@ -94,7 +104,7 @@ class myBlobAnalyzerSide(object):
             ####################
 
             # first, go through and make centroids and areas
-            self.find_centroids_and_areas(cImg, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
+            self.find_centroids_and_areas(labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                           bottomEdge, topEdge)
 
             print("first contourCentroids:\n{}".format(contourCentroids))
@@ -246,27 +256,49 @@ class myBlobAnalyzerSide(object):
             # MCF, Use defect concavity point to determine if defect is safe to use for pill split
             nDiffs = 1
             keep = 0
+            # if self.stepCount == 2148:
+            #     print(cont.tolist())
             for i in range(len(defects[:,:,3])):
+                # We have at least one qualifying concavity bease on depth
                 if(defects[i][0][3] >= self.concavityThresh * 256 ):
                     # Get the X and Y arrays from every (self.skipPts) pixel in the contour
-                    xarray = np.squeeze(cont[0::self.skipPts])[:, 0]
-                    yarray = np.squeeze(cont[0::self.skipPts])[:, 1]
+                    xarray = np.squeeze(cont[0::self.skip_pts])[:, 0]
+                    yarray = np.squeeze(cont[0::self.skip_pts])[:, 1]
                     # Get the slopes delta x, delta y around the perimeter of the contour
-                    dx = np.diff(xarray)
-                    dx = np.append(dx, [dx[0]])  # Wrap
-                    dy = np.diff(yarray)
-                    dy = np.append(dy, [dy[0]])  # Wrap
-                    prev = False
-                    for i in range(len(dx) - 1):
-                        if prev:
-                            prev=False
+                    dx = np.diff(np.append(xarray,[xarray[0]]))
+                    dy = np.diff(np.append(yarray,[yarray[0]]))
+                    prev = 0
+                    # if self.stepCount == 2148:
+                    #     print(cont.tolist())
+                    #     print("Skip points", self.skip_pts)
+                    #     print("Point\tx\ty\tdx\tdy\tprodx\tdot\tx-dot")
+
+                    # We can re-use i as the outer loop will not continue
+                    for i in range(len(dx)):
+                        if prev > 0: # skip 2 points after finding a concavity
+                            prev -= 1
+                            # if self.stepCount == 2148:
+                            #      print("{}\t{}\t{}\t **Skipped".format(i+1,xarray[i], yarray[i]))
                             continue
-                        val = (dx[i] * dy[i + 1] - dy[i] * dx[i + 1])
-                        if val > self.thresholdSlopeVect and yarray[i+1] > topEdge + 4 \
-                                and yarray[i+1] + self.maxAssign < bottomEdge:
-                            keep +=1
-                            prev = True # skip next index
-                    break
+                        x_prod = dx[i - 1] * dy[i] - dy[i - 1] * dx[i]
+                        dot_prod = dx[i - 1] * dx[i] + dy[i - 1] * dy[i]
+
+                        # if self.stepCount == 2148:
+                        #     print("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(i+1,xarray[i], yarray[i],
+                        #                                                   dx[i], dy[i], x_prod, dot_prod,
+                        #                                               x_prod - dot_prod))
+
+                        if yarray[i] > topEdge + (self.maxAssign // 4) \
+                                and yarray[i] + self.maxAssign < bottomEdge:
+                            if x_prod > self.thresh_prodx_hi:
+                                # The following check are too sensitive for dirty window
+                                #      or (x_prod > self.thresh_prodx_lo
+                                #      and (x_prod - dot_prod) > self.thresh_dot):
+                                keep +=1
+                                # if self.stepCount == 2148:
+                                #     print("*** Defect# {}".format(keep))
+                                prev = 2 # skip next 2 points
+                    break # kill outer loop
             if keep > 0:
                 nDiffs = int(np.ceil(keep/2.0)+1)
         else:
@@ -274,29 +306,28 @@ class myBlobAnalyzerSide(object):
 
         return nDiffs
 
-    def find_centroids_and_areas(self, cImg, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
+    def find_centroids_and_areas(self, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                  bottomEdge, topEdge):
         """*************************************************************************************************************
         * This method will search through the contours and add contourCentroids for appropriate contours.
         """
         for iObj in labelVec:
             cCont = contours[iObj]
-            nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
-            # if self.stepCount == 4280:
-            #     print ("cont = ",cCont)
-
-            [vx, vy, x, y] = cv2.fitLine(cCont, cv2.DIST_L2, 0, 0.01, 0.01)
-
-            # Set centroid at center of the blob
-            contourCentroids[iObj] = np.zeros(2)
-            contourCentroids[iObj][0] = x
-            contourCentroids[iObj][1] = y
             contourAreas[iObj] = cv2.contourArea(cCont)
+            if contourAreas[iObj] > self.minBlobArea:
+                nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
 
-            hullArea = cv2.contourArea(cv2.convexHull(cCont))
-            thisTotalConcavityArea = hullArea - contourAreas[iObj]
-            # print("\t\t\t\t\t\t\t\t\t\t\t\t\ttotal concavity area: {}".format(thisTotalConcavityArea))
-            numDiffPillsinConts[iObj] = nDiffs
+                [vx, vy, x, y] = cv2.fitLine(cCont, cv2.DIST_L2, 0, 0.01, 0.01)
+
+                # Set centroid at center of the blob
+                contourCentroids[iObj] = np.zeros(2)
+                contourCentroids[iObj][0] = x
+                contourCentroids[iObj][1] = y
+
+                # hullArea = cv2.contourArea(cv2.convexHull(cCont))
+                # thisTotalConcavityArea = hullArea - contourAreas[iObj]
+                # print("\t\t\t\t\t\t\t\t\t\t\t\t\ttotal concavity area: {}".format(thisTotalConcavityArea))
+                numDiffPillsinConts[iObj] = nDiffs
 
     def CropImage(self, cImgIn, first):
         """***************************************************************************************
@@ -335,6 +366,8 @@ class myBlobAnalyzerSide(object):
         sideView[0:int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[0])),:] = 0
         # Set the bottom percent(0.02) rows to zero
         sideView[-int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])):,:] = 0
+
+        cImg = 255 * cImg.copy().astype('uint8')
         sideView = 255*sideView.copy().astype('uint8')
         if first:
             print("Side window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
