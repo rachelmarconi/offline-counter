@@ -10,17 +10,12 @@ import numpy as np
 import tracker
 import cv2
 import easygui
-
-# %%
-# frameStruct = sio.loadmat(r'saveRuns\test_81aspirin_120_11.mat')
-
-# frameStruct = sio.loadmat(r'saveRuns\testProto_fish_01.mat')
-# frameStruct = sio.loadmat(r'saveRuns\test.mat')
-# cFrame = frameStruct['frameStore'][:,:,2936]
-
+from timeit import default_timer as timer
 
 def runSingleVideo(videoFileName):
     print(videoFileName)
+
+    max_time = 0
 
     #New .npy file name
     npyfile = videoFileName.replace(".mp4", "_info.npy")
@@ -59,6 +54,7 @@ def runSingleVideo(videoFileName):
 
     maxAssign = 115  # 65#110#120#65
 
+    flipHer = True
     maxBlob = 2800.0
     minBlob = maxBlob * 0.35
     tracks = []
@@ -72,7 +68,6 @@ def runSingleVideo(videoFileName):
 
     curId = 1
     numFrames = 1
-    flipHer = False
     isValid, cFrame = cVideo.read()
     iFrame = 0
     while isValid:
@@ -87,8 +82,14 @@ def runSingleVideo(videoFileName):
         frame[frame < 150] = 0
         frame[frame >= 55] = 1
 
+        start = timer()
         tracksNew, nextId = tracker.step(frame, bA, tracks, maxAssign, curId, estVelStart, numFrames, False, maxBlob,
                                          minBlob)
+        tm = (timer() - start) * 1000.0
+        print("Step time = {:10.4f} ms".format(tm))
+        if tm > max_time:
+            max_time = tm
+
         cCount.append(np.uint8(nextId-1))
 
         tracks = tracksNew.copy();
@@ -108,6 +109,7 @@ def runSingleVideo(videoFileName):
     print(f'min blob: {bA.minBlobArea}')
     print(f'max blob: {bA.maxBlobSize}')
     print("count: " + str(curId - 1))
+    print('Maximum step time = {:10.4f} ms'.format(max_time))
 
     while len(cCount) <= numTotalFrames:
         cCount.append(np.uint8(nextId - 1))
@@ -115,19 +117,10 @@ def runSingleVideo(videoFileName):
     np.save(npyfile, cCount)
 
 if __name__ == "__main__":
-    # videoFileName = r'transferVideos/2019.09.09_17.08.26_reqInv_disp101.mp4'
-    #videoFileList = glob.glob('transferVideos/*.mp4')
-    #videoFileList.sort()
 
     infile = easygui.fileopenbox(msg='Please locate the video file',
                                       title='Specify File', default='transferVideos/*.mp4',
                                       filetypes='*.mp4')
 
-    # for vFileName in videoFileList:
-    #index = 0
-    #runSingleVideo(videoFileList[index])
     if infile != None:
         runSingleVideo(infile)
-    # for vFileName in videoFileList:
-    # print(vFileName)
-    # runSingleVideo(vFileName)
