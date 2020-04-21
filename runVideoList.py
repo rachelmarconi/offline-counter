@@ -14,6 +14,7 @@ import csv
 import sys
 from os import path
 from pathlib import Path
+from timeit import default_timer as timer
 
 # %%
 # frameStruct = sio.loadmat(r'saveRuns\test_81aspirin_120_11.mat')
@@ -36,7 +37,7 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     stdout_fileno = sys.stdout
     p = Path(videoFileName).stem + ".txt"
     sys.stdout = open(p, 'w')
-
+    max_time = 0
     numTotalFrames = int(cVideo.get(cv2.CAP_PROP_FRAME_COUNT))
     h = int(cVideo.get(cv2.CAP_PROP_FRAME_HEIGHT))
     w = int(cVideo.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -81,6 +82,7 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     curId = 1
     numFrames = 1
 
+    run_start = timer()
     isValid, cFrame = cVideo.read()
     iFrame = 0
     while isValid:
@@ -95,8 +97,14 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
         frame[frame < 150] = 0
         frame[frame >= 55] = 1
 
+        start = timer()
         tracksNew, nextId = tracker.step(frame, bA, tracks, maxAssign, curId, estVelStart, numFrames, False, maxBlob,
                                          minBlob)
+        tm = (timer() - start) * 1000.0
+        print("Step time = {:10.4f} ms".format(tm))
+        if tm > max_time:
+            max_time = tm
+
         cCount.append(np.uint8(nextId-1))
 
         tracks = tracksNew.copy();
@@ -113,12 +121,18 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
         # break
         isValid, cFrame = cVideo.read()
 
+    run_end = timer()
     # print this to log file
     print(f'min blob: {bA.minBlobArea}')
     print(f'max blob: {bA.maxBlobSize}')
     print('Flip: ', flipHer)
     print("count: " + str(curId - 1))
-
+    print('Maximum step time = {:10.4f} ms'.format(max_time))
+    tm = run_end - run_start
+    min = int(tm / 60.0)
+    sec = tm - min
+    print('Total run time = {}m:{:.4f}s'.format(min, sec))
+    print('Pills/min counted = {:.2f}'.format((curId - 1) * 60.0/tm))
     sys.stdout.flush()
     sys.stdout.close()
 
