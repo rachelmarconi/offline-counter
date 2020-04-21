@@ -87,7 +87,7 @@ class myBlobAnalyzerSide(object):
 
         if np.any(cImg):
             # print("{:.0f}/{:.0f}; {:.0f}".format(self.maxBlobSize, self.minBlobArea, self.maxAssign))
-            print("Step# ", self.stepCount, " pill sz: ", self.maxBlobSize, "/", self.minBlobArea, "/", self.maxAssign)
+            #mcf print("Step# ", self.stepCount, " pill sz: ", self.maxBlobSize, "/", self.minBlobArea, "/", self.maxAssign)
 
             tmpGarbage, contoursAll, hierarchy = cv2.findContours(cImg, cv2.RETR_TREE, 1)
             contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
@@ -107,8 +107,8 @@ class myBlobAnalyzerSide(object):
             self.find_centroids_and_areas(labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                           bottomEdge, topEdge)
 
-            print("first contourCentroids:\n{}".format(contourCentroids))
-            print("contour areas: {}".format(contourAreas))
+            #mcf print("first contourCentroids:\n{}".format(contourCentroids))
+            #mcf print("contour areas: {}".format(contourAreas))
 
             # test each predicted area to see which area is closest to this predicted
             # self.find_nearest_predicted_area(contourAreas, contourCentroids, contours, matchedCentroids,
@@ -157,7 +157,7 @@ class myBlobAnalyzerSide(object):
                 x, y, w, h = cv2.boundingRect(cCont)
                 if  cArea <= (self.maxBlobSize * 1.1) and numDiffPillsinConts[iObj] < 2:
                     # add actual centroid
-                    print("using area centroid")
+                    #mcf print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
                 elif not calibrate or self.frameCount > 15: # cArea > (self.maxBlobSize * 1.1):
                     if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
@@ -190,12 +190,12 @@ class myBlobAnalyzerSide(object):
                             others = True # other pills are in our Y range
                             break
                 if not others and self.side_contours is not None:
-                    print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
+                    #mcf print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
                     side_count = self.get_side_count(y - y_tolarance,
                                                      y + h + y_tolarance, bottomEdge, topEdge)
                     if estPills < side_count:
                         estPills = side_count
-                        print("Using side count")
+                        #mcf print("Using side count")
 
                 while estPills > len(foundMatches):
                     ct = contourCentroids[iObj]
@@ -209,9 +209,9 @@ class myBlobAnalyzerSide(object):
                         area = np.append(area, cArea / nDiffs)
                         cBlobSplit = cArea / self.maxBlobSize
                         self.blobSplit = np.max([self.blobSplit, cBlobSplit])
-                        print('{} blob split {}'.format(
-                            datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'),
-                            cBlobSplit))
+                        #mcf print('{} blob split {}'.format(
+                        #mcf     datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'),
+                        #mcf     cBlobSplit))
                 area = np.append(area, cArea / nDiffs)
                 if isFirst:
                     isFirst = False
@@ -350,9 +350,9 @@ class myBlobAnalyzerSide(object):
         bottom_y = int(cImg.shape[0] - (np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])))
         cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
 
-        if first:
-            print("Image size w = {}, h= {}".format(cImg.shape[1], cImg.shape[0]))
-            print("Main window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
+        #mcf if first:
+        #mcf     print("Image size w = {}, h= {}".format(cImg.shape[1], cImg.shape[0]))
+        #mcf     print("Main window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
 
         # MAKE side view
         sideView = cImgIn.copy();
@@ -369,8 +369,8 @@ class myBlobAnalyzerSide(object):
 
         cImg = 255 * cImg.copy().astype('uint8')
         sideView = 255*sideView.copy().astype('uint8')
-        if first:
-            print("Side window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
+        #mcf if first:
+        #mcf     print("Side window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
 
         return cImg, sideView
 
@@ -395,7 +395,7 @@ class myBlobAnalyzerSide(object):
             area = cv2.contourArea(cont)
             if area >= self.minBlobArea:
                 x, y, w, h = cv2.boundingRect(cont)
-                print("Side pill: left = {}, top = {}, bottom = {}, area = {}".format(x, y, y + h, area))
+                #mcf print("Side pill: left = {}, top = {}, bottom = {}, area = {}".format(x, y, y + h, area))
 
                 # Is this contour at the right height?
                 if y >= top and (y + h) <= bottom:
@@ -404,6 +404,6 @@ class myBlobAnalyzerSide(object):
                 # Area estimates are not reliable
                 #estPills = 1 + int(area / (self.maxBlobSize + 0.1))
                 #num_counted = max(num_counted, estPills)
-        print("Side pill count: {}".format(num_counted))
+        #mcf print("Side pill count: {}".format(num_counted))
 
         return num_counted
