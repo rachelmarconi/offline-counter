@@ -79,8 +79,8 @@ def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameHeight 
 
     tracks = [ tracks[i] for i in range(len(tracks)) if tracks[i]['center'][0][1] <  frameHeight] # 280 frameHeight
     predictedCentroidsList = [ tracks[i]['center'][0] for i in range(len(tracks)) ]
-    for i in range(len(tracks)):
-        print("    {}\tid: {}".format(tracks[i]['center'],tracks[i]['id']))
+    #mcf for i in range(len(tracks)):
+    #mcf     print("    {}\tid: {}".format(tracks[i]['center'],tracks[i]['id']))
         
     return tracks,predictedCentroidsList
 
@@ -94,9 +94,9 @@ def detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBl
     
     # Perform blob analysis to find connected components.
     area,centroids = bA.step(mask,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
-    print("    --------")
-    for c in centroids:
-        print("    {}".format(c))
+    #mcf print("    --------")
+    #mcf for c in centroids:
+    #mcf     print("    {}".format(c))
     
     return area, centroids, mask
 
