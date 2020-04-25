@@ -4,24 +4,16 @@ Created on Wed Sep 11 18:35:30 2019
 
 @author: joeca
 """
+import os
 
 from myBlobAnalyzerSide import myBlobAnalyzerSide
 import numpy as np
 import tracker
 import cv2
-#import easygui
 import csv
 import sys
 from os import path
 from pathlib import Path
-from timeit import default_timer as timer
-
-# %%
-# frameStruct = sio.loadmat(r'saveRuns\test_81aspirin_120_11.mat')
-
-# frameStruct = sio.loadmat(r'saveRuns\testProto_fish_01.mat')
-# frameStruct = sio.loadmat(r'saveRuns\test.mat')
-# cFrame = frameStruct['frameStore'][:,:,2936]
 
 results_file = open("results.txt", "w")
 
@@ -35,16 +27,20 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
 
     # Set stdio to log file for the run
     stdout_fileno = sys.stdout
-    p = Path(videoFileName).stem + ".txt"
+    log_path = path.join('.', 'logs')
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
+
+    p = path.join(log_path, Path(videoFileName).stem + ".txt")
     sys.stdout = open(p, 'w')
-    max_time = 0
+
     numTotalFrames = int(cVideo.get(cv2.CAP_PROP_FRAME_COUNT))
     h = int(cVideo.get(cv2.CAP_PROP_FRAME_HEIGHT))
     w = int(cVideo.get(cv2.CAP_PROP_FRAME_WIDTH))
     print("dimensions: " + str(h) + ", " + str(w))
     frameStruct = {'frameStore': np.zeros((h, w, 45))}
 
-    for i in range(45):
+    for i in range(45): # was 45
         _, im = cVideo.read()
         frameStruct['frameStore'][:, :, i] = im[:, :, 0]
         cCount.append(np.uint8(0)) # no count for these frames I hope
@@ -57,9 +53,20 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     bA.percentFrameRemoveX = [1 / 100.0, 44 / 100.0]  # [0,0]#
     bA.percentFrameRemoveY = [2 / 100.0, 2 / 100.0]  # [0,0]#
 
+    # This was added to create a background mask
+    gray_cutoff = 150
+    frame = (255. - backgroundModel).astype('uint8')
+    if flip:
+        frame = np.flip(np.flip(frame, 0), 1)
+
+    frame[frame < gray_cutoff] = 0
+    frame[frame >= 55] = 1
+
+    bA.bkmask = cv2.dilate(frame, None)
+
     bA.concavityThresh = 8#18#8#18#32
     bA.maxBlobSize = max_blob
-    bA.minBlobAreaAbs = 300;
+    bA.minBlobAreaAbs = 300
     bA.minBlobAreaPercentage = 35
     bA.minBlobArea = bA.minBlobAreaAbs
 
@@ -82,7 +89,6 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     curId = 1
     numFrames = 1
 
-    run_start = timer()
     isValid, cFrame = cVideo.read()
     iFrame = 0
     while isValid:
@@ -94,17 +100,11 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
         if flipHer:
             frame = np.flip(np.flip(frame, 0), 1)
 
-        frame[frame < 150] = 0
+        frame[frame < gray_cutoff] = 0
         frame[frame >= 55] = 1
 
-        start = timer()
         tracksNew, nextId = tracker.step(frame, bA, tracks, maxAssign, curId, estVelStart, numFrames, False, maxBlob,
                                          minBlob)
-        tm = (timer() - start) * 1000.0
-        print("Step time = {:10.4f} ms".format(tm))
-        if tm > max_time:
-            max_time = tm
-
         cCount.append(np.uint8(nextId-1))
 
         tracks = tracksNew.copy();
@@ -121,23 +121,19 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
         # break
         isValid, cFrame = cVideo.read()
 
-    run_end = timer()
     # print this to log file
     print(f'min blob: {bA.minBlobArea}')
     print(f'max blob: {bA.maxBlobSize}')
     print('Flip: ', flipHer)
     print("count: " + str(curId - 1))
-    print('Maximum step time = {:10.4f} ms'.format(max_time))
-    tm = run_end - run_start
-    min = int(tm / 60.0)
-    sec = tm - min
-    print('Total run time = {}m:{:.4f}s'.format(min, sec))
-    print('Pills/min counted = {:.2f}'.format((curId - 1) * 60.0/tm))
+
     sys.stdout.flush()
     sys.stdout.close()
 
     # print set to console
     sys.stdout = stdout_fileno
+
+
     print(f'min blob: {bA.minBlobArea}')
     print(f'max blob: {bA.maxBlobSize}')
     print('Flip: ', flipHer)
@@ -149,38 +145,36 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     np.save(npyfile, cCount)
 
     if (curId - 1) == good_count:
-        results_file.write("Passed expected {} counted {}\n".format(good_count,(curId-1)))
+        results_file.write("Passed expected {} counted {}\n".format(good_count, (curId-1)))
         print("Passed expected {} counted {}\n".format(good_count,(curId-1)))
         passed_count +=1
     else:
-        results_file.write("Failed expected {} counted {}\n".format(good_count,(curId-1)))
-        print("Failed expected {} counted {}\n".format(good_count,(curId-1)))
+        results_file.write("Failed expected {} counted {}\n".format(good_count, (curId-1)))
+        print("Failed expected {} counted {}\n".format(good_count, (curId-1)))
         failed_count += 1
 
 if __name__ == "__main__":
     global passed_count, failed_count
-    # for vFileName in videoFileList:
-    #index = 0
-    #runSingleVideo(videoFileList[index])
+
     passed_count = 0
     failed_count = 0
+    flip = False
 
     max_size = 0
     pill_count = 0
-    flip = False
 
     csvfile = "videos.csv"
     csvDataFile = open(csvfile)
     readCSV = csv.reader(csvDataFile, delimiter=',')
-    if readCSV == None:
+    if readCSV is None:
         print("Main list file not found: ", csvfile)
         exit()
 
     for row in readCSV:
         if len(row) < 4:
-            print("CSV incomplete row")
+            #print("CSV incomplete row")
             continue
-        if not path.exists(row[0]):
+        elif not path.exists(row[0]):
             print("File not found: ", row[0])
             continue
 
@@ -196,9 +190,9 @@ if __name__ == "__main__":
         print('Running: ', row[0])
         runSingleVideo(row[0], max_size, flip, pill_count)
 
-    results_file.write("Videos run = {}\n".format(passed_count+failed_count) )
-    results_file.write("Total passed = {}\n".format(passed_count) )
-    results_file.write("Total failed = {}\n".format(failed_count) )
+    results_file.write("Videos run = {}\n".format(passed_count + failed_count))
+    results_file.write("Total passed = {}\n".format(passed_count))
+    results_file.write("Total failed = {}\n".format(failed_count))
     # show results on console
     print("***** COMPLETE *****")
     print("Videos run = {}".format(passed_count+failed_count) )
