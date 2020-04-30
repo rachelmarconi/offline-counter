@@ -7,9 +7,8 @@ Created on Wed May 30 13:22:07 2018
 # %%
 import numpy as np
 import cv2
-import datetime
 import math
-import matplotlib.pyplot as plt
+import debug_functions as db
 
 
 class myBlobAnalyzerSide(object):
@@ -56,8 +55,11 @@ class myBlobAnalyzerSide(object):
         # self.thresh_dot = 5
         # Take a point every (skipPts) around contour perimeter.
 
-        self.skip_pts = 10 # take every 10th point
-        self.bkmask = None
+        self.skip_pts = 10  # Contour perimeter analysis, take every 10th point
+        self.bkmask = None  # Mask of background debris to ignore.
+        self.floating_debris = False  # Trash detected, maybe miscount.
+        # mcf: debug
+        self.show_frame = None
 
         # *********** End concavity qualification parameters
 
@@ -85,20 +87,12 @@ class myBlobAnalyzerSide(object):
         cImg, sideView = self.CropImage(cImgIn, self.first)
         self.first = False
 
-        #mcf debug image
-        # if self.stepCount == 1075:
-        #     self.show_frame_image( cImg, "Main view")
-        #     cv2.waitKey(0)
-        #     self.show_frame_image( sideView, "Side view")
-        #     cv2.waitKey(0)
-        #mcf end debug
-
         bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameRemoveY[1])) - 3
         topEdge = int(cImg.shape[0] * self.percentFrameRemoveY[0]) + 3
 
         if np.any(cImg):
-            # print("{:.0f}/{:.0f}; {:.0f}".format(self.maxBlobSize, self.minBlobArea, self.maxAssign))
-            print("Step# ", self.stepCount, " pill sz: ", self.maxBlobSize, "/", self.minBlobArea, "/", self.maxAssign)
+            # print("Step#{}, pill size: {:.0f}/{:.0f}; {:.0f}".format(
+            #     self.stepCount, self.maxBlobSize, self.minBlobArea, self.maxAssign))
 
             contours, self.side_contours, hierarchy = self.get_contours(cImg, sideView)
             labelVec = np.arange(0, len(contours))
@@ -114,12 +108,8 @@ class myBlobAnalyzerSide(object):
             self.find_centroids_and_areas(labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                           bottomEdge, topEdge)
 
-            print("first contourCentroids:\n{}".format(contourCentroids))
-            print("contour areas: {}".format(contourAreas))
-
-            # test each predicted area to see which area is closest to this predicted
-            # self.find_nearest_predicted_area(contourAreas, contourCentroids, contours, matchedCentroids,
-            #                                  predictedCentroidsList)
+            # print("first contourCentroids:\n{}".format(contourCentroids))
+            # print("contour areas: {}".format(contourAreas))
 
             # then go through contours again for adding centroids to final list
             area, centroids = self.get_centroids_from_areas(area, centroids, contourAreas, contourCentroids, contours,
@@ -161,17 +151,18 @@ class myBlobAnalyzerSide(object):
         * This method will match the centroids to the found areas and attempt to set or adjust the centroid position
         * to its most probable location.
         """
-        SIDE_VIEW_OFFSET = 15  # approximat pixel error in side view image
+        min_trash_area = 12  # smallest area to be counted as trash
+
         for iObj in labelVec:
             foundMatches = np.zeros((0, 2))  # none
             cArea = contourAreas[iObj]
+            cCont = contours[iObj]
             estPills = 1
             if cArea > self.minBlobArea:
-                cCont = contours[iObj]
                 x, y, w, h = cv2.boundingRect(cCont)
                 if  cArea <= (self.maxBlobSize * 1.1) and numDiffPillsinConts[iObj] < 2:
                     # add actual centroid
-                    print("using area centroid")
+                    # print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
                 elif not calibrate or self.frameCount > 15: # cArea > (self.maxBlobSize * 1.1):
                     if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
@@ -204,12 +195,12 @@ class myBlobAnalyzerSide(object):
                             others = True # other pills are in our Y range
                             break
                 if not others and self.side_contours is not None:
-                    print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
+                    # print("Getting side count pill: left = {}, top = {}, bottom = {}".format(x, y, y+h))
                     side_count = self.get_side_count(y - y_tolarance,
                                                      y + h + y_tolarance, bottomEdge, topEdge)
                     if estPills < side_count:
                         estPills = side_count
-                        print("Using side count")
+                        # print("Using side count")
 
                 while estPills > len(foundMatches):
                     ct = contourCentroids[iObj]
@@ -223,14 +214,22 @@ class myBlobAnalyzerSide(object):
                         area = np.append(area, cArea / nDiffs)
                         cBlobSplit = cArea / self.maxBlobSize
                         self.blobSplit = np.max([self.blobSplit, cBlobSplit])
-                        print('{} blob split {}'.format(
-                            datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'),
-                            cBlobSplit))
+                        # print('{} blob split {}'.format(
+                        #     datetime.datetime.now().strftime('%Y.%m.%d_%H.%M.%S'),
+                        #     cBlobSplit))
                 area = np.append(area, cArea / nDiffs)
                 if isFirst:
                     isFirst = False
                     centroids = np.zeros((0, 2))
                 centroids = np.vstack((centroids, foundMatches))
+            elif min_trash_area < cArea < self.minBlobArea * .9:
+                x, y, w, h = cv2.boundingRect(cCont)
+                # be sure its not a pill coming or going
+                if y > topEdge + 7 and y + h + 7 < bottomEdge:
+                    self.floating_debris = True
+                    # mcf: debug
+                    # if self.show_frame is not None:
+                    #     db.show_frame_image(self.show_frame, "Debris in Image")
         return area, centroids
 
     def find_2_blob_centroids(self, cCont, x, y):
@@ -289,26 +288,21 @@ class myBlobAnalyzerSide(object):
                     prev = 0
 
                     # We can re-use i as the outer loop will not continue
-                    for i in range(len(dx)):
+                    for j in range(len(dx)):
                         if prev > 0: # skip 2 points after finding a concavity
                             prev -= 1
                             continue
-                        x_prod = dx[i - 1] * dy[i] - dy[i - 1] * dx[i]
-                        dot_prod = dx[i - 1] * dx[i] + dy[i - 1] * dy[i]
+                        x_prod = dx[j - 1] * dy[j] - dy[j - 1] * dx[j]
+                        #dot_prod = dx[j - 1] * dx[j] + dy[j - 1] * dy[j]
 
-                        if yarray[i] > topEdge + (self.maxAssign // 4) \
-                                and yarray[i] + self.maxAssign < bottomEdge:
+                        if yarray[j] > topEdge + (self.maxAssign // 4) \
+                                and yarray[j] + self.maxAssign < bottomEdge:
                             if x_prod > self.thresh_prodx_hi:
                                 # The following check are too sensitive for dirty window
                                 #      or (x_prod > self.thresh_prodx_lo
                                 #      and (x_prod - dot_prod) > self.thresh_dot):
                                 keep += 1
                                 prev = 2  # real concavity, skip 2 points
-                                # if not self.avoid_spot(xarray[i], yarray[i]):
-                                #     keep += 1
-                                #     prev = 2 # real concavity, skip 2 points
-                                # else:
-                                #     prev = 1  # dirt concavity, skip 1 point
 
                     break # kill outer loop
             if keep > 0:
@@ -317,25 +311,6 @@ class myBlobAnalyzerSide(object):
             nDiffs = 1
         return nDiffs
 
-    # def avoid_spot(self, x, y):
-    #     """
-    #     Check the point against the list of background contours. If it overlaps, return True
-    #     :param x, y: Point to check
-    #     :return: True if the x,y point, falls on a background contour
-    #     """
-    #     rval = False
-    #     for rect in self.avoidSpots:
-    #         x1, y1, h, w = rect
-    #         x2 = x1 + w + 1
-    #         y2 = y1 + h + 1
-    #         x1 -= 1
-    #         y1 -= 1
-    #
-    #         if x1 <= x <= x2 and y1 <= y <= y2:
-    #             print("Skipping spot at {},{}".format(x, y))
-    #             rval = True
-    #             break
-    #     return rval
 
     def find_centroids_and_areas(self, labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                  bottomEdge, topEdge):
@@ -355,9 +330,6 @@ class myBlobAnalyzerSide(object):
                 contourCentroids[iObj][0] = x
                 contourCentroids[iObj][1] = y
 
-                # hullArea = cv2.contourArea(cv2.convexHull(cCont))
-                # thisTotalConcavityArea = hullArea - contourAreas[iObj]
-                # print("\t\t\t\t\t\t\t\t\t\t\t\t\ttotal concavity area: {}".format(thisTotalConcavityArea))
                 numDiffPillsinConts[iObj] = nDiffs
 
     def CropImage(self, cImgIn, first):
@@ -368,6 +340,9 @@ class myBlobAnalyzerSide(object):
         """
         # make this a percentage of the frame
         cImg = cImgIn.copy()
+        # mcf debug.
+        # self.show_frame = 255 * cImg.astype('uint8')
+
         # Set the left percent(0.01) cols to zero
         left_x = int(np.ceil(cImg.shape[1]*(self.percentFrameRemoveX[0] )))
         cImg[:, 0:int(np.ceil(cImg.shape[1] * self.percentFrameRemoveX[0]))] = 0
@@ -398,8 +373,8 @@ class myBlobAnalyzerSide(object):
         # Set the bottom percent(0.02) rows to zero
         sideView[-int(np.ceil(cImg.shape[0]*self.percentFrameRemoveY[1])):,:] = 0
 
-        cImg = 255 * cImg.copy().astype('uint8')
-        sideView = 255*sideView.copy().astype('uint8')
+        cImg = 255 * cImg.astype('uint8')
+        sideView = 255*sideView.astype('uint8')
         if first:
             print("Side window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
 
@@ -426,31 +401,14 @@ class myBlobAnalyzerSide(object):
             area = cv2.contourArea(cont)
             if area >= self.minBlobArea:
                 x, y, w, h = cv2.boundingRect(cont)
-                print("Side pill: left = {}, top = {}, bottom = {}, area = {}".format(x, y, y + h, area))
+                # print("Side pill: left = {}, top = {}, bottom = {}, area = {}"
+                #       .format(x, y, y + h, area))
 
                 # Is this contour at the right height?
                 if y >= top and (y + h) <= bottom:
                     num_counted += self.count_pills_in_cont(cont, bottomEdge, topEdge)
 
-                # Area estimates are not reliable
-                #estPills = 1 + int(area / (self.maxBlobSize + 0.1))
-                #num_counted = max(num_counted, estPills)
-        print("Side pill count: {}".format(num_counted))
+        # print("Side pill count: {}".format(num_counted))
 
         return num_counted
 
-    # %%
-    def show_frame_image(self, frame, msg="Frame"):
-        """
-        For debuging, it is handy to view a frame as an image.
-        :param frame: 2D numpy array to view as an image
-        :param msg: Caption for the image
-        :return: Nothing
-        """
-        a = frame.copy()
-        a = np.expand_dims(a, axis=2)
-        a = np.concatenate((a, a, a), axis=2)
-        print(a.shape)
-        plt.title(msg)
-        plt.imshow(a)
-        plt.show()
