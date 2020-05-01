@@ -8,7 +8,7 @@ Created on Wed May 30 13:22:07 2018
 import numpy as np
 import cv2
 import math
-import debug_functions as db
+# import debug_functions as db
 
 
 class myBlobAnalyzerSide(object):
