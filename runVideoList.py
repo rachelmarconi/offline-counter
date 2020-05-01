@@ -167,8 +167,8 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     print("count: " + str(curId - 1))
     print('Avg frame time : {:.4}ms'.format(ave_ms))
     print('Max frame time : {:.4}ms'.format(max_ms))
-    results_file.write('Avg frame time : {:.4}ms'.format(ave_ms))
-    results_file.write('Max frame time : {:.4}ms'.format(max_ms))
+    results_file.write('Avg frame time : {:.4}ms\n'.format(ave_ms))
+    results_file.write('Max frame time : {:.4}ms\n'.format(max_ms))
 
     while len(cCount) <= numTotalFrames:
         cCount.append(np.uint8(nextId - 1))
