@@ -96,28 +96,29 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     iFrame = 0
     sum_ms = 0.0
     max_ms = 0.0
+    ave_ms = 0.0
     while isValid:
         start = time.time()
         # _,cFrame = cVideo.read()
         iFrame = iFrame + 1
 
         # mcf: background mask
-        frame_sum -= frame_keep[0]  # subtract the oldest
-        frame_sum += cFrame[:, :, 0]  #  add the new frame
-        frame_keep.pop(0)  # Remove oldest frame from the bottom of the list
-        frame_keep.append(cFrame[:, :, 0])  # Put newest frame on top of the list.
-        bk_frame = (255. - (frame_sum / avg_count)).astype('uint8')
-        bk_frame[bk_frame < 100] = 0
-        bk_frame[bk_frame >= 1] = 1
-
+        # frame_sum -= frame_keep[0]  # subtract the oldest
+        # frame_sum += cFrame[:, :, 0]  #  add the new frame
+        # frame_keep.pop(0)  # Remove oldest frame from the bottom of the list
+        # frame_keep.append(cFrame[:, :, 0])  # Put newest frame on top of the list.
+        # bk_frame = (255. - (frame_sum / avg_count)).astype('uint8')
+        # bk_frame[bk_frame < 100] = 0
+        # bk_frame[bk_frame >= 1] = 1
+        # mcf background mask
+        # if flipHer:
+        #     bk_frame = np.flip(bk_frame)
         frame = abs(backgroundModel - cFrame[:, :, 0]).astype('uint8')
         if flipHer:
             frame = np.flip(frame)
-            # mcf background mask
-            bk_frame = np.flip(bk_frame)
 
-        kernel = np.ones((4, 4), np.uint8)
-        bA.bkmask = cv2.dilate(bk_frame, kernel, iterations=1)
+        # kernel = np.ones((4, 4), np.uint8)
+        # bA.bkmask = cv2.dilate(bk_frame, kernel, iterations=1)
 
         frame[frame < gray_cutoff] = 0
         frame[frame >= 55] = 1
@@ -144,15 +145,15 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
             max_ms = ms
         print('frame time:{:.4}ms'.format(ms))
 
+    if iFrame > 0:
+        ave_ms = sum_ms / iFrame
+    print('Avg frame time : {:.4}ms'.format(ave_ms))
+    print('Max frame time : {:.4}ms'.format(max_ms))
     # print this to log file
     print(f'min blob: {bA.minBlobArea}')
     print(f'max blob: {bA.maxBlobSize}')
     print('Flip: ', flipHer)
     print("count: " + str(curId - 1))
-    if iFrame > 0:
-        ave_ms = sum_ms / iFrame
-        print('Avg frame time : {:.4}ms'.format(ave_ms))
-        print('Max frame time : {:.4}ms'.format(max_ms))
 
     sys.stdout.flush()
     sys.stdout.close()
@@ -164,6 +165,10 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
     print(f'max blob: {bA.maxBlobSize}')
     print('Flip: ', flipHer)
     print("count: " + str(curId - 1))
+    print('Avg frame time : {:.4}ms'.format(ave_ms))
+    print('Max frame time : {:.4}ms'.format(max_ms))
+    results_file.write('Avg frame time : {:.4}ms'.format(ave_ms))
+    results_file.write('Max frame time : {:.4}ms'.format(max_ms))
 
     while len(cCount) <= numTotalFrames:
         cCount.append(np.uint8(nextId - 1))
