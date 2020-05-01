@@ -262,8 +262,6 @@ class myBlobAnalyzerSide(object):
         cHull = cv2.convexHull(cont, returnPoints=False)
         defects = cv2.convexityDefects(cont, cHull)
         if defects is not None:
-            x, y, w, h = cv2.boundingRect(cont)
-
             # MCF, Use defect concavity point to determine if defect is safe to
             # use for pill split
             nDiffs = 1
