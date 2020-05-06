@@ -8,6 +8,7 @@ Created on Wed May 30 13:22:07 2018
 import numpy as np
 import cv2
 import math
+import time
 # import debug_functions as db
 
 
@@ -58,8 +59,11 @@ class myBlobAnalyzerSide(object):
         self.skip_pts = 10  # Contour perimeter analysis, take every 10th point
         self.bkmask = None  # Mask of background debris to ignore.
         self.floating_debris = False  # Trash detected, maybe miscount.
+
         # mcf: debug
         self.show_frame = None
+        self.time_start = 0
+        self.time_string = ""
 
         # *********** End concavity qualification parameters
 
@@ -90,6 +94,8 @@ class myBlobAnalyzerSide(object):
         bottomEdge = int(cImg.shape[0] * (1 - self.percentFrameRemoveY[1])) - 3
         topEdge = int(cImg.shape[0] * self.percentFrameRemoveY[0]) + 3
 
+        self.time_string += ", ba:{:6.4f}".format((time.time() - self.time_start)*1000.)
+
         if np.any(cImg):
             # print("Step#{}, pill size: {:.0f}/{:.0f}; {:.0f}".format(
             #     self.stepCount, self.maxBlobSize, self.minBlobArea, self.maxAssign))
@@ -104,6 +110,7 @@ class myBlobAnalyzerSide(object):
             numDiffPillsinConts = np.zeros(len(contours), dtype=int)
             ####################
 
+            self.time_string += ", bb:{:6.4f}".format((time.time() - self.time_start)*1000.)
             # first, go through and make centroids and areas
             self.find_centroids_and_areas(labelVec, contourAreas, contourCentroids, contours, numDiffPillsinConts,
                                           bottomEdge, topEdge)
@@ -112,10 +119,12 @@ class myBlobAnalyzerSide(object):
             # print("contour areas: {}".format(contourAreas))
 
             # then go through contours again for adding centroids to final list
+            self.time_string += ", bc:{:6.4f}".format((time.time() - self.time_start)*1000.)
             area, centroids = self.get_centroids_from_areas(area, centroids, contourAreas, contourCentroids, contours,
                                                             isFirst, labelVec, matchedCentroids, numDiffPillsinConts,
                                                             bottomEdge, topEdge, calibrate)
 
+            self.time_string += ", bd:{:6.4f}".format((time.time() - self.time_start)*1000.)
             if self.sideViewSizeAdjust != 0 and self.frameCount <= 5:
                 # add in sideview areas
                 side_areas = np.array(self.getSideAreas(sideView))
@@ -136,12 +145,20 @@ class myBlobAnalyzerSide(object):
                 if (self.frameCount <= 50) and hierarchy is not None:  # 50 frames of pills to check clear est
                     self.clearEst = self.clearEst + int(
                         (len(hierarchy[0]) - len(contours)) > 1)  # create an estimate for how clear it is
+        self.time_string += ", be:{:6.4f}".format((time.time() - self.time_start)*1000.)
         return area, centroids
 
     def get_contours(self, cImg, sideView):
-        _, contoursAll, hierarchy = cv2.findContours(cImg, cv2.RETR_TREE, 1)
+        (major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
+        if major_ver > '3':
+            contoursAll, hierarchy = cv2.findContours(cImg, cv2.RETR_TREE, 1)
+        else:
+            _, contoursAll, hierarchy = cv2.findContours(cImg, cv2.RETR_TREE, 1)
         contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
-        _, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE, 1)
+        if major_ver > '3':
+            contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE, 1)
+        else:
+            _, contoursAll, hierarchy = cv2.findContours(sideView, cv2.RETR_TREE, 1)
         side_contours = [contoursAll[i] for i in range(len(contoursAll)) if hierarchy[:, i, -1] == -1]
         return contours, side_contours, hierarchy
 
