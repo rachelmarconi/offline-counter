@@ -14,8 +14,11 @@ from myBlobAnalyzerSide import myBlobAnalyzerSide
 import pillUtil
 
 #%%
+startTime = 0.0
+time_string = ""
 
 def tracker(vDetected,FPS,maxAssign):
+    global startTime
     # Create System objects used for reading video, detecting moving objects,
     # and displaying the results.
     bA = myBlobAnalyzerSide()
@@ -36,21 +39,21 @@ def tracker(vDetected,FPS,maxAssign):
         startTime = time.clock()
         frame = vDetected[:,:,iFrame]
         
-        centroids, mask = detectObjects(bA,frame)
+        centroids, mask = detectObjects(bA, frame)
         tracks = predictNewLocationsOfTracks(tracks)
         assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracks,centroids,maxAssign)
         
-        tracks = updateAssignedTracks(tracks,centroids,assignments)
-        tracks = updateUnassignedTracks(tracks,unassignedTracks)
+        tracks = updateAssignedTracks(tracks, centroids, assignments)
+        tracks = updateUnassignedTracks(tracks, unassignedTracks)
         tracks = deleteLostTracks(tracks)
-        tracks,centroids,countVec,nextId = createNewTracks(tracks, centroids, unassignedDetections,
-                                                           countVec,iFrame,nextId,estVelStart,
+        tracks, centroids, countVec, nextId = createNewTracks(tracks, centroids, unassignedDetections,
+                                                           countVec, iFrame, nextId, estVelStart,
                                                            frame.shape[0] - bA.maxAssign)
         
         frameTime[iFrame] = time.clock() - startTime
     return countVec, frameTime
 
-def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameHeight = 300):
+def predictNewLocationsOfTracks(tracks, numFrames = 1, rightEdge= 140, frameHeight = 300):
     predictedCentroidsList = np.zeros((len(tracks),2))
     for i in range(len(tracks)):
         # Predict the current location of the track.
@@ -79,8 +82,9 @@ def predictNewLocationsOfTracks(tracks,numFrames = 1,rightEdge= 140,frameHeight 
 
     tracks = [ tracks[i] for i in range(len(tracks)) if tracks[i]['center'][0][1] <  frameHeight] # 280 frameHeight
     predictedCentroidsList = [ tracks[i]['center'][0] for i in range(len(tracks)) ]
-    #mcf for i in range(len(tracks)):
-    #mcf     print("    {}\tid: {}".format(tracks[i]['center'],tracks[i]['id']))
+
+    for i in range(len(tracks)):
+        print("    {}\tid: {}".format(tracks[i]['center'], tracks[i]['id']))
         
     return tracks,predictedCentroidsList
 
@@ -94,9 +98,9 @@ def detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBl
     
     # Perform blob analysis to find connected components.
     area,centroids = bA.step(mask,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
-    #mcf print("    --------")
-    #mcf for c in centroids:
-    #mcf     print("    {}".format(c))
+    print("    --------")
+    for c in centroids:
+        print("    {}".format(c))
     
     return area, centroids, mask
 
@@ -199,20 +203,28 @@ def createNewTracks(tracks, centroids, unassignedDetections,countVec,iFrame,estV
     return tracks,centroidsNew,countVec
 
 def step(frame,bA,tracks,maxAssign,curId,estVelStart,numFrames,calibrate,inputMaxBlob,inputMinBlob):
+    global startTime
 
+    startTime = time.time()
     print("step----------------------------------------------")
     tracksPred,predictedCentroidsList = predictNewLocationsOfTracks(tracks,numFrames,bA.rightEdge,frame.shape[0])
-
+    time_string = "ta:{:6.4f}".format((time.time()-startTime) * 1000.)
+    bA.time_start = startTime
+    bA.time_string = ""
     area,centroids, mask = detectObjects(bA,frame,predictedCentroidsList,maxAssign,calibrate,inputMaxBlob,inputMinBlob)
-    
+    time_string += bA.time_string
+    time_string += ", tb:{:6.4f}".format((time.time()-startTime) * 1000.)
+
     assignments, unassignedTracks, unassignedDetections = detectionToTrackAssignment(tracksPred,centroids,maxAssign)
+    time_string += ", tc:{:6.4f}".format((time.time()-startTime) * 1000.)
     tracksAssign = updateAssignedTracks(tracksPred,centroids,assignments)
     tracksUnassign = updateUnassignedTracks(tracksAssign,unassignedTracks)
-    
     tracksUnassign,nextId = updateTrackCountId(tracksUnassign,curId)
-    
+
     tracksDelete = deleteLostTracks(tracksUnassign)
+    time_string += ", td:{:6.4f}".format((time.time()-startTime) * 1000.)
     tracksNew,centroids,nada = createNewTracks(tracksDelete, centroids, unassignedDetections,None,None,estVelStart,
                                                frame.shape[0] - bA.maxAssign)
-    
+    time_string += ", te:{:6.4f}".format((time.time()-startTime) * 1000.)
+    print(time_string)
     return tracksNew,nextId
