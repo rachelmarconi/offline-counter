@@ -79,6 +79,8 @@ class myBlobAnalyzerSide(object):
                 self.concavityThresh = radius / 2.6
                 self.skip_pts = int(round(perimeter/self.skip_scale))
                 self.thresh_prodx_hi = self.skip_pts ** 2 * self.scale_prodx_hi
+                if self.thresh_prodx_hi > 65:
+                    self.thresh_prodx_hi = 65
                 # self.thresh_prodx_lo = self.skip_pts ** 2 * self.scale_prodx_lo
                 # self.thresh_dot = self.skip_pts ** 2 * self.scale_dot
 
