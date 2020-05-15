@@ -100,7 +100,7 @@ class myBlobAnalyzerSide(object):
 
         if np.any(cImg):
             # print("Step#{}, pill size: {:.0f}/{:.0f}; {:.0f}".format(
-            #     self.stepCount, self.maxBlobSize, self.minBlobArea, self.maxAssign))
+            #      self.stepCount, self.maxBlobSize, self.minBlobArea, self.maxAssign))
 
             contours, self.side_contours, hierarchy = self.get_contours(cImg, sideView)
             labelVec = np.arange(0, len(contours))
@@ -183,7 +183,7 @@ class myBlobAnalyzerSide(object):
                     # add actual centroid
                     # print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
-                elif not calibrate or self.frameCount > 15: # cArea > (self.maxBlobSize * 1.1):
+                elif not calibrate or self.frameCount > 150: # cArea > (self.maxBlobSize * 1.1):
                     if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
                         x1 = contourCentroids[iObj][0]
                         y1 = contourCentroids[iObj][1]
