@@ -29,8 +29,8 @@ class myBlobAnalyzerSide(object):
         self.sideViewSizeAdjust = 100  # in percent
         self.side_contours = None
 
-        self.areaVec = np.zeros((500, 1))
-        self.minAreaVec = np.nan * np.ones((500, 1))
+        self.areaVec = np.zeros((5000, 1))
+        self.minAreaVec = np.nan * np.ones((5000, 1))
 
         self.maxBlobSize = 800
         self.clearEst = 0
@@ -133,7 +133,7 @@ class myBlobAnalyzerSide(object):
             # print('time to check:  {0:.06f}'.format(time.time() - startEval))
             if area.size > 0:
                 # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
-                if (calibrate and self.frameCount <= 500 and area.size > 0):
+                if (calibrate and self.frameCount <= 5000 and area.size > 0):
                     self.maxBlobSize = np.max(np.append(area, self.maxBlobSize))  # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area)  # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount],
