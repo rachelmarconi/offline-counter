@@ -139,7 +139,7 @@ class myBlobAnalyzerSide(object):
                     self.maxBlobSize = np.max(np.append(area, self.maxBlobSize))  # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area)  # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount],
-                                                     98)  # 98th percentile (reduce some outliers)
+                                                     80)  # 98th percentile (reduce some outliers)
                     self.minBlobArea = np.max(
                         ((self.minBlobAreaPercentage / 100.0) * self.maxBlobSize, self.minBlobAreaAbs))
                 self.frameCount = self.frameCount + 1  # increase framecount
