@@ -68,7 +68,7 @@ class myBlobAnalyzerSide(object):
         # *********** End concavity qualification parameters
 
     def step(self, cImgIn, predictedCentroidsList, garbMaxAssign, calibrate, inputMaxBlob, inputMinBlob):
-        if not calibrate:
+        if calibrate == '2':
             self.maxBlobSize = inputMaxBlob
             self.minBlobArea = inputMinBlob
             # Scale the max concavity based on the pill size
@@ -135,7 +135,7 @@ class myBlobAnalyzerSide(object):
             # print('time to check:  {0:.06f}'.format(time.time() - startEval))
             if area.size > 0:
                 # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
-                if (calibrate and self.frameCount <= 5000 and area.size > 0):
+                if ((calibrate == '0' and self.frameCount <= 500 or calibrate == '1' and self.frameCount <= 5000) and area.size > 0):
                     self.maxBlobSize = np.max(np.append(area, self.maxBlobSize))  # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area)  # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount],
@@ -183,7 +183,7 @@ class myBlobAnalyzerSide(object):
                     # add actual centroid
                     # print("using area centroid")
                     foundMatches = np.vstack((foundMatches, contourCentroids[iObj]))
-                elif not calibrate or self.frameCount > 150: # cArea > (self.maxBlobSize * 1.1):
+                elif calibrate == '2' or self.frameCount > 150: # cArea > (self.maxBlobSize * 1.1):
                     if ((y + h) < bottomEdge and y > topEdge) or numDiffPillsinConts[iObj] > 1:
                         x1 = contourCentroids[iObj][0]
                         y1 = contourCentroids[iObj][1]
