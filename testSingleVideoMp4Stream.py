@@ -43,8 +43,8 @@ def runSingleVideo(videoFileName):
 
     bA.percentFrameRemoveX = [1 / 100.0, 44 / 100.0]  # [0,0]#
     bA.percentFrameRemoveY = [2 / 100.0, 2 / 100.0]  # [0,0]#
-    flipHer = False
-    maxBlob = 3400.0  # 5800, 3400, 2800, 1280, 1200
+    flipHer = True
+    maxBlob = 962.0  # 5800, 4285, 3400, 2800, 1280, 1200
     minBlob = maxBlob * 0.35
 
     frame = (255. - backgroundModel).astype('uint8')
@@ -121,8 +121,11 @@ def runSingleVideo(videoFileName):
         frame[frame < gray_cutoff] = 0
         frame[frame >= 55] = 1
 
+        # calibrate '0' do calibrate first 500 frames,
+        # '1' do 5000 frame calibrate
+        # '2' use pre-calibrate values
         tracksNew, nextId = tracker.step(frame, bA, tracks, maxAssign, curId, estVelStart,
-                                         numFrames, False, maxBlob, minBlob)
+                                         numFrames, '0', maxBlob, minBlob)
         cCount.append(np.uint8(nextId - 1))
 
         tracks = tracksNew.copy();
