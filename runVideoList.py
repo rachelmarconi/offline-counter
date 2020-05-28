@@ -123,8 +123,11 @@ def runSingleVideo(videoFileName, max_blob = 2800, flip = False, good_count = 20
         frame[frame < gray_cutoff] = 0
         frame[frame >= 55] = 1
 
+        # calibrate '0' do calibrate first 500 frames,
+        # '1' do 5000 frame calibrate
+        # '2' use pre-calibrate values
         tracksNew, nextId = tracker.step(frame, bA, tracks, maxAssign, curId, estVelStart,
-                                         numFrames, False, maxBlob, minBlob)
+                                         numFrames, '2', maxBlob, minBlob)
         cCount.append(np.uint8(nextId - 1))
 
         tracks = tracksNew.copy();
