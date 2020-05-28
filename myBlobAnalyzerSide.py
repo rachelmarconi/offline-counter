@@ -14,6 +14,7 @@ import time
 
 class myBlobAnalyzerSide(object):
     def __init__(self):
+        self.version = "1.0.0 2020-05-27"
         self.minBlobAreaAbs = 100
         self.minBlobArea = self.minBlobAreaAbs
         self.minBlobAreaPercentage = 0
@@ -99,7 +100,7 @@ class myBlobAnalyzerSide(object):
         self.time_string += ", ba:{:6.4f}".format((time.time() - self.time_start)*1000.)
 
         if np.any(cImg):
-            # print("Step#{}, pill size: {:.0f}/{:.0f}; {:.0f}".format(
+            #print("Step#{}, pill size: {:.0f}/{:.0f}; {:.0f}".format(
             #      self.stepCount, self.maxBlobSize, self.minBlobArea, self.maxAssign))
 
             contours, self.side_contours, hierarchy = self.get_contours(cImg, sideView)
@@ -135,11 +136,12 @@ class myBlobAnalyzerSide(object):
             # print('time to check:  {0:.06f}'.format(time.time() - startEval))
             if area.size > 0:
                 # if we've seen 50 (500 frames of pills) pills, really no need to continue computation
-                if ((calibrate == '0' and self.frameCount <= 500 or calibrate == '1' and self.frameCount <= 5000) and area.size > 0):
+                if ((calibrate == '0' and self.frameCount <= 500 or calibrate == '1'
+                     and self.frameCount <= 5000) and area.size > 0):
                     self.maxBlobSize = np.max(np.append(area, self.maxBlobSize))  # take the max
                     self.areaVec[self.frameCount - 1] = np.max(area)  # max of the ones in this frame
                     self.maxBlobSize = np.percentile(self.areaVec[0:self.frameCount],
-                                                     80)  # 98th percentile (reduce some outliers)
+                                                     98)  # 80, 98th percentile (reduce some outliers)
                     self.minBlobArea = np.max(
                         ((self.minBlobAreaPercentage / 100.0) * self.maxBlobSize, self.minBlobAreaAbs))
                 self.frameCount = self.frameCount + 1  # increase framecount
@@ -274,7 +276,7 @@ class myBlobAnalyzerSide(object):
         ct2 = [[x + vecX, y + vecY]]
         return ct1, ct2
 
-    def count_pills_in_cont(self, cont, bottomEdge, topEdge):
+    def count_pills_in_cont(self, cont, area, bottomEdge, topEdge):
         """*************************************************************************************************************
         * This method will get the estimated pill count for a given contour based on concavities.
         """
@@ -324,6 +326,9 @@ class myBlobAnalyzerSide(object):
                     break # kill outer loop
             if keep > 0:
                 nDiffs = int(np.ceil(keep/2.0)+1)
+            if nDiffs > 2 and nDiffs > int(area / self.maxBlobSize) + 1:
+                nDiffs = int(area / self.maxBlobSize) + 1
+
         else:
             nDiffs = 1
         return nDiffs
@@ -338,7 +343,7 @@ class myBlobAnalyzerSide(object):
             cCont = contours[iObj]
             contourAreas[iObj] = cv2.contourArea(cCont)
             if contourAreas[iObj] > self.minBlobArea:
-                nDiffs = self.count_pills_in_cont(cCont, bottomEdge, topEdge)
+                nDiffs = self.count_pills_in_cont(cCont, contourAreas[iObj], bottomEdge, topEdge)
 
                 [vx, vy, x, y] = cv2.fitLine(cCont, cv2.DIST_L2, 0, 0.01, 0.01)
 
@@ -374,6 +379,7 @@ class myBlobAnalyzerSide(object):
         cImg[-int(np.ceil(cImg.shape[0] * self.percentFrameRemoveY[1])):, :] = 0
 
         if first:
+            print("BA Version=", self.version)
             print("Image size w = {}, h= {}".format(cImg.shape[1], cImg.shape[0]))
             print("Main window mask from {},{} to {},{}".format(left_x,top_y,right_x,bottom_y))
 
@@ -423,7 +429,7 @@ class myBlobAnalyzerSide(object):
 
                 # Is this contour at the right height?
                 if y >= top and (y + h) <= bottom:
-                    num_counted += self.count_pills_in_cont(cont, bottomEdge, topEdge)
+                    num_counted += self.count_pills_in_cont(cont, area, bottomEdge, topEdge)
 
         # print("Side pill count: {}".format(num_counted))
 
